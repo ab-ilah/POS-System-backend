@@ -27,6 +27,8 @@ describe("workflows", () => {
     expect(ci).toContain("supabase start");
     expect(ci).toContain("supabase db reset");
     expect(ci).toContain("npm run test:rls");
+    expect(ci).toContain("supabase test db");
+    expect(ci).toContain("scripts/restore-drill.sh");
     expect(ci).toContain("pull_request:");
   });
 
@@ -63,6 +65,7 @@ describe("workflows", () => {
     expect(keepalive).toContain("PROD_DB_URL");
     const production = keepalive?.split("keepalive-production:")[1] ?? "";
     expect(production).toContain("environment: prod-ops");
+    expect(production).toContain("github.ref == 'refs/heads/main'");
     expect(production).not.toContain("environment: production");
     expect(production).toContain("PROD_DB_URL");
     expect(production).not.toContain("STAGING_DB_URL");
@@ -72,6 +75,7 @@ describe("workflows", () => {
     const backup = workflows["backup-db.yml"];
     expect(backup).toBeDefined();
     expect(backup).toContain("environment: prod-ops");
+    expect(backup).toContain("github.ref == 'refs/heads/main'");
     expect(backup).not.toContain("environment: production");
     expect(backup).toContain("scripts/backup-database.sh");
     expect(backup).toContain('cron: "0 2 * * *"');

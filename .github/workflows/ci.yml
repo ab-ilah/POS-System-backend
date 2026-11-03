@@ -82,11 +82,22 @@ jobs:
       - name: Start local Supabase
         run: npx supabase start
 
+      - name: Install age
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y age
+
       - name: Reset database
         run: npx supabase db reset
+
+      - name: pgTAP
+        run: npx supabase test db
 
       - name: RLS suite
         env:
           # Public local demo connection. Not a hosted credential.
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
         run: npm run test:rls
+
+      - name: Restore drill
+        run: bash scripts/restore-drill.sh

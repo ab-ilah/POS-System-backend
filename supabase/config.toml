@@ -174,8 +174,8 @@ enable_refresh_token_rotation = true
 # Allows refresh tokens to be reused after expiry, up to the specified interval in seconds.
 # Requires enable_refresh_token_rotation = true.
 refresh_token_reuse_interval = 10
-# Staff accounts are created by an owner, not by public signup. A signup request must
-# not be able to choose a role. The auth trigger always inserts profiles as cashier.
+# Staff accounts are created by an owner, not by public signup. The auth trigger
+# creates a profile and does not assign a role.
 enable_signup = false
 # Allow/disallow anonymous sign-ins to your project.
 enable_anonymous_sign_ins = false

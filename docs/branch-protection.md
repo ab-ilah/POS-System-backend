@@ -40,7 +40,9 @@ Used by the staging database push and the staging keepalive.
 
 ### `production`
 
-Required reviewer: Gabriel. This gates the manual production database push and the auth-config update that turns signup off. The job runs only from `main`.
+Required reviewer: Gabriel. This gates the manual production database push and the auth-config update that turns signup off.
+
+Deployment branches: Selected branches, `main` only. The workflow also refuses the job unless `github.ref` is `refs/heads/main`. Set the environment rule as well, so a workflow edit cannot widen the gate by itself.
 
 Secrets:
 
@@ -50,6 +52,8 @@ Secrets:
 ### `prod-ops`
 
 No required reviewer. This environment exists so the daily production keepalive and the nightly backup do not wait for an approval. It must not be used for migrations.
+
+Deployment branches: Selected branches, `main` only. The keepalive and backup jobs also require `github.ref == 'refs/heads/main'`. A manual run from another branch must not reach production.
 
 Secrets, and nothing else:
 

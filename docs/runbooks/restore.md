@@ -18,7 +18,8 @@ On a trusted machine, not in CI:
 
 ```bash
 aws s3 cp "s3://BUCKET/daily/YYYY/MM/DD/pos-STAMP.dump.age" ./pos.dump.age \
-  --endpoint-url "$BACKUP_S3_ENDPOINT"
+  --endpoint-url "$BACKUP_S3_ENDPOINT" \
+  --force-path-style
 age -d -i /path/to/pos-backup-identity.txt -o pos.dump pos.dump.age
 ```
 
@@ -31,27 +32,57 @@ Pick one:
 - Local: `npx supabase start` in a checkout of the commit that matches the backup era.
 - Wiped staging: only after Gabriel has confirmed the URL is the staging session pooler. Never substitute `PROD_DB_URL` during a drill.
 
-A full Supabase dump includes platform schemas (`auth`, `storage`, and others). Restoring every schema onto a running stack collides with objects the platform owns. Restore the `public` schema only.
+A full Supabase dump includes platform schemas (`auth`, `storage`, and others). Do not restore those onto a running stack. Dump the application schemas together:
 
-The same command works on an empty database and on one that already has these tables. `--clean` drops each object before recreating it. `--if-exists` makes that drop a no-op when the object is not there yet, which is the empty-database case. `--no-owner` and `--no-privileges` skip roles that exist only on the source project.
+```bash
+pg_dump -Fc --schema=public --schema=private --dbname "$SOURCE_URL" --file=pos.dump
+```
+
+`private` holds the triggers. Restoring `public` alone leaves those triggers pointing at functions that are not there.
+
+There are two restores. Do not ask pg_restore to drop existing objects first. On a database that already has the schema, that drop tries to remove `public.app_role` and can fail halfway, leaving `public` empty.
+
+Run `pg_restore` as `supabase_admin` (or another role that can disable triggers). Pass `--disable-triggers` so historical lines on completed sales can load. The finished-sale trigger is still there afterwards. Pass `--single-transaction` so a failed restore rolls back instead of stopping in the middle. The client must be at least the server major.
+
+**Empty application schema.** The Supabase project is up, `auth` exists, and `public` does not yet contain these tables (a new local stack before `db reset`, or after you have dropped `private`, the application tables, and `public.app_role`). This loads schema and data, including `private` and the enum:
+
+```bash
+pg_restore -l pos.dump | grep -v -E 'SCHEMA - public |COMMENT - SCHEMA public ' > restore.list
+pg_restore \
+  --no-owner \
+  --disable-triggers \
+  --single-transaction \
+  --exit-on-error \
+  --use-list=restore.list \
+  --dbname "$TARGET_URL" \
+  pos.dump
+```
+
+The list drops `CREATE SCHEMA public` because that schema already exists. `private` is created by the dump. The signup trigger is attached to `auth.users`, so it is not inside this dump. Recreate it after the restore:
+
+```sql
+create trigger on_auth_user_created
+after insert on auth.users
+for each row execute function private.handle_new_user();
+```
+
+**Already migrated.** Migrations have been applied and the application tables are empty. Do not drop the enum. Load rows only:
 
 ```bash
 pg_restore \
-  --no-owner \
-  --no-privileges \
+  --data-only \
   --schema=public \
-  --clean \
-  --if-exists \
+  --no-owner \
+  --disable-triggers \
+  --single-transaction \
   --exit-on-error \
   --dbname "$TARGET_URL" \
   pos.dump
 ```
 
-`$TARGET_URL` is either the local stack (`postgresql://postgres:postgres@127.0.0.1:54322/postgres` after `npx supabase start`) or the staging session pooler after Gabriel has confirmed the URL. Never point this at production during a drill.
+`$TARGET_URL` is the local stack (`postgresql://postgres:postgres@127.0.0.1:54322/postgres` after `npx supabase start`) or the staging session pooler after Gabriel has confirmed the URL. Never point this at production during a drill.
 
-Use a fresh Supabase project when you do not want to wipe staging. Create it, run the migrations (`npx supabase db push`), then run the `pg_restore` command above. `--clean --if-exists` still applies: the migrated tables are dropped and replaced by the dump.
-
-The `pg_restore` client must be at least the server major (the backup job uses the server's own major).
+`scripts/restore-drill.sh` runs both paths against the local stack. CI runs it after `supabase db reset`.
 
 `npx supabase db reset` rebuilds from migrations and the local seed. It wipes whatever you just restored. Use it to prove the migrations and RLS suite, not as the step after a data restore.
 

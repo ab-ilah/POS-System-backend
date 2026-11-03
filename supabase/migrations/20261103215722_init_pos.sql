@@ -79,7 +79,7 @@ create table public.sales (
   receipt_no text not null unique,
   customer_id uuid references public.customers (id) on delete restrict,
   cashier_id uuid not null references public.profiles (id) on delete restrict,
-  status text not null default 'completed',
+  status text not null default 'open',
   void_reason text,
   voided_at timestamptz,
   subtotal_pesewas integer not null,
@@ -90,7 +90,7 @@ create table public.sales (
   sold_at timestamptz not null default now(),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  constraint sales_status_check check (status in ('completed', 'voided')),
+  constraint sales_status_check check (status in ('open', 'completed', 'voided')),
   constraint sales_subtotal_pesewas_check check (subtotal_pesewas >= 0),
   constraint sales_total_pesewas_check check (total_pesewas >= 0),
   constraint sales_tendered_pesewas_check check (tendered_pesewas >= 0),
@@ -101,7 +101,7 @@ create table public.sales (
   ),
   constraint sales_void_shape_check check (
     (
-      status = 'completed'
+      status in ('open', 'completed')
       and void_reason is null
       and voided_at is null
     )
@@ -327,8 +327,15 @@ begin
     raise exception 'sale amounts and identity columns are immutable'
       using errcode = '42501';
   end if;
-  if new.status is distinct from old.status and new.status <> 'voided' then
-    raise exception 'a sale can only move to voided'
+  if new.status is distinct from old.status
+     and not (
+       old.status = 'open'
+       and new.status = 'completed'
+       and new.void_reason is null
+       and new.voided_at is null
+     )
+     and new.status <> 'voided' then
+    raise exception 'a sale can only be completed from open, or voided'
       using errcode = '42501';
   end if;
   if new.status = 'voided' and (new.void_reason is null or length(btrim(new.void_reason)) = 0) then
@@ -348,6 +355,34 @@ grant execute on function private.enforce_sale_update() to authenticated, servic
 create trigger sales_enforce_void_only
 before update on public.sales
 for each row execute function private.enforce_sale_update();
+
+create or replace function private.enforce_sale_item_open_sale()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  parent_status text;
+begin
+  select s.status
+  into parent_status
+  from public.sales as s
+  where s.id = coalesce(new.sale_id, old.sale_id);
+  if parent_status is distinct from 'open' then
+    raise exception 'cannot change lines on a finished sale'
+      using errcode = '42501';
+  end if;
+  return coalesce(new, old);
+end;
+$$;
+
+revoke all on function private.enforce_sale_item_open_sale() from public, anon;
+grant execute on function private.enforce_sale_item_open_sale() to authenticated, service_role;
+
+create trigger sale_items_require_open_sale
+before insert or update on public.sale_items
+for each row execute function private.enforce_sale_item_open_sale();
 
 create or replace function private.enforce_credit_balance_owner()
 returns trigger
@@ -541,5 +576,6 @@ with check (
     from public.sales as s
     where s.id = sale_id
       and s.cashier_id = (select auth.uid())
+      and s.status = 'open'
   )
 );

@@ -15,7 +15,7 @@ age-keygen -y pos-backup-identity.txt
 
 Commit the printed `age1...` line only. Keep `pos-backup-identity.txt`, and keep a second offline copy. See `docs/runbooks/restore.md`.
 
-- The object-storage secrets on the `production` environment. The provider is not chosen yet. The same variables work for Cloudflare R2 or Backblaze B2:
+- The object-storage secrets on the `prod-ops` environment, not on `production`. `production` is the reviewer-gated migration environment and must not hold the backup credentials. The provider is not chosen yet. The same variables work for Cloudflare R2 or Backblaze B2:
 
 | Secret | Meaning |
 | --- | --- |
@@ -28,7 +28,7 @@ Commit the printed `age1...` line only. Keep `pos-backup-identity.txt`, and keep
 | `BACKUP_MIN_BYTES` | Optional. Dumps smaller than this fail. Default is 8192 bytes |
 | `PROD_DB_URL` | Session pooler URI, port 5432. Not the transaction pooler |
 
-`PROD_DB_URL` for this job lives on the `prod-ops` environment, which has no required reviewer. The same URL is also on `production` for migrations. It is never on `staging`.
+`BACKUP_S3_*` lives only on `prod-ops`. `PROD_DB_URL` for this job is the copy on `prod-ops`. Migrations use a separate copy on `production`. Neither value is stored on `staging`.
 
 ## Layout in the bucket
 

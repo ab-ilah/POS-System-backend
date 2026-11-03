@@ -178,7 +178,7 @@ async function insertProbe(tx: Tx, table: TableName): Promise<void> {
       'RLS-LINE-' || replace(gen_random_uuid()::text, '-', ''),
       null,
       (select auth.uid()),
-      'completed',
+      'open',
       1000,
       1000,
       1000,
@@ -506,6 +506,27 @@ describe("RLS matches the permission matrix", () => {
       return rows[0]?.role ?? null;
     });
     expect(assigned).toBe("manager");
+  });
+
+  it("a cashier cannot add a line to their own finished sale", async () => {
+    const ownSaleId = model.sales.find((sale) => sale.cashierId === userForRole("cashier").id)?.id;
+    if (!ownSaleId) {
+      throw new Error("seed is missing a cashier sale");
+    }
+    await expect(
+      asUser(userForRole("cashier").id, async (tx) => {
+        await tx`
+          insert into public.sale_items (
+            sale_id, variant_id, product_name, size_name, colour_name,
+            qty, unit_price_pesewas, line_total_pesewas
+          ) values (
+            ${ownSaleId}::uuid,
+            ${model.targets.probeVariantId}::uuid,
+            'Finished', 'L', 'Crisp White', 1, 1000, 1000
+          )
+        `;
+      }),
+    ).rejects.toMatchObject({ code: "42501" });
   });
 
   it("a cashier cannot add a line to someone else's sale", async () => {

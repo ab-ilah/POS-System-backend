@@ -38,6 +38,7 @@ jobs:
 
   keepalive-production:
     name: keepalive-production
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: prod-ops
     timeout-minutes: 10

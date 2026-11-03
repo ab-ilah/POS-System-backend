@@ -100,7 +100,7 @@ function renderSales(model: SeedModel): string {
   const saleRows = model.sales
     .map(
       (sale) =>
-        `  (${sqlUuid(sale.id)}, ${sqlString(sale.receiptNo)}, ${sale.customerId === null ? "null" : sqlUuid(sale.customerId)}, ${sqlUuid(sale.cashierId)}, ${sqlString(sale.status)}, ${sqlInt(sale.subtotalPesewas, sale.receiptNo)}, ${sqlInt(sale.totalPesewas, sale.receiptNo)}, ${sqlInt(sale.tenderedPesewas, sale.receiptNo)}, ${sqlInt(sale.changePesewas, sale.receiptNo)}, ${sqlInt(sale.creditAppliedPesewas, sale.receiptNo)})`,
+        `  (${sqlUuid(sale.id)}, ${sqlString(sale.receiptNo)}, ${sale.customerId === null ? "null" : sqlUuid(sale.customerId)}, ${sqlUuid(sale.cashierId)}, 'open', ${sqlInt(sale.subtotalPesewas, sale.receiptNo)}, ${sqlInt(sale.totalPesewas, sale.receiptNo)}, ${sqlInt(sale.tenderedPesewas, sale.receiptNo)}, ${sqlInt(sale.changePesewas, sale.receiptNo)}, ${sqlInt(sale.creditAppliedPesewas, sale.receiptNo)})`,
     )
     .join(",\n");
   const itemRows = model.sales
@@ -135,7 +135,11 @@ insert into public.sale_items (
   unit_price_pesewas,
   line_total_pesewas
 ) values
-${itemRows};`;
+${itemRows};
+
+update public.sales
+set status = 'completed'
+where id in (${model.sales.map((sale) => sqlUuid(sale.id)).join(", ")});`;
 }
 
 export function renderSeedSql(model: SeedModel = buildSeed()): string {

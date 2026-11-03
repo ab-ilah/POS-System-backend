@@ -80,7 +80,7 @@ export const PERMISSION_SCOPE_NOTES: Readonly<Record<TableName, string>> = {
   sales:
     "Any staff member can record a sale attributed to themselves. Owner and manager can void a sale (status, void reason, void timestamp). Amounts and the rest of the row are immutable. Nobody deletes a sale.",
   sale_items:
-    "A line can be inserted only on a sale whose cashier is the signed-in staff member. Lines are then immutable. Corrections are a void plus a new sale.",
+    "A line can be inserted only on an open sale whose cashier is the signed-in staff member. Completed and voided sales reject new lines and line edits. Corrections are a void plus a new sale.",
 };
 
 function flatten(): readonly PermissionRow[] {
