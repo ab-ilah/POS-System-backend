@@ -16,6 +16,8 @@ if [ -z "$container" ]; then
   echo "local supabase database container is not running. Start it with: npx supabase start" >&2
   exit 1
 fi
+export RESTORE_DB_CONTAINER="$container"
+bash "$root/scripts/assert-postgres-major.sh"
 if ! command -v age >/dev/null 2>&1 || ! command -v age-keygen >/dev/null 2>&1; then
   echo "age and age-keygen must be installed" >&2
   exit 1

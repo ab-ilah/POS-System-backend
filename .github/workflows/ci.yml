@@ -88,6 +88,9 @@ jobs:
       - name: Start local Supabase
         run: npx supabase start
 
+      - name: Check Postgres major matches config.toml
+        run: bash scripts/assert-postgres-major.sh
+
       - name: Install age
         run: |
           sudo apt-get update

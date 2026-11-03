@@ -42,7 +42,9 @@ pg_dump -Fc --schema=public --schema=private --dbname "$SOURCE_URL" --file=pos.d
 
 There are two restores. Do not ask pg_restore to drop existing objects first. On a database that already has the schema, that drop tries to remove `public.app_role` and can fail halfway, leaving `public` empty.
 
-Run `pg_restore` as `supabase_admin` (or another role that can disable triggers). Pass `--disable-triggers` so historical lines on completed sales can load. The finished-sale trigger is still there afterwards. Pass `--single-transaction` so a failed restore rolls back instead of stopping in the middle. The client must be at least the server major.
+Run `pg_restore` as `supabase_admin` (or another role that can disable triggers). Pass `--disable-triggers` so historical lines on completed sales can load. The finished-sale trigger is still there afterwards. Pass `--single-transaction` so a failed restore rolls back instead of stopping in the middle.
+
+The local database and the `pg_dump` inside that container must both be the major in `supabase/config.toml` (`major_version = 17`). `scripts/assert-postgres-major.sh` checks that, and CI plus `scripts/restore-drill.sh` run it. A Postgres 16 server or client does not match this project.
 
 **Empty application schema.** The Supabase project is up, `auth` exists, and `public` does not yet contain these tables (a new local stack before `db reset`, or after you have dropped `private`, the application tables, and `public.app_role`).
 

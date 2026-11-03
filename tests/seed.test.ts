@@ -14,6 +14,7 @@ describe("seed catalogue", () => {
     const committed = readFileSync("supabase/seed.sql", "utf8");
     const rendered = renderSeedSql(seed);
     expect(committed).toBe(rendered);
+    expect(rendered).toContain("set local app.seed = 'on'");
     expect(rendered).toContain('"role":"owner"');
     expect(rendered).toContain("insert into public.profiles (id, full_name)");
     expect(rendered).not.toContain("::public.app_role");

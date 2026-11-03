@@ -36,6 +36,11 @@ describe("workflows", () => {
     expect(ci).toContain("npm test");
     expect(ci).toContain("npm run secrets:scan");
     expect(ci).toContain("supabase start");
+    expect(ci).toContain("scripts/assert-postgres-major.sh");
+    expect(readFileSync("scripts/restore-drill.sh", "utf8")).toContain("scripts/assert-postgres-major.sh");
+    expect(readFileSync("supabase/config.toml", "utf8")).toMatch(/^major_version = 17$/m);
+    expect(readFileSync("scripts/assert-postgres-major.sh", "utf8")).toContain("server_version_num");
+    expect(readFileSync("scripts/assert-postgres-major.sh", "utf8")).toContain("pg_dump");
     expect(ci).toContain("supabase db reset");
     expect(ci).toContain("npm run test:rls");
     expect(ci).toContain("supabase test db");

@@ -9,6 +9,8 @@ const protection = readFileSync("docs/branch-protection.md", "utf8");
 describe("restore and operations docs", () => {
   it("describes an empty restore and a data-only restore", () => {
     expect(restore).toContain("--schema=private");
+    expect(restore).toContain("major_version = 17");
+    expect(restore).toContain("scripts/assert-postgres-major.sh");
     expect(restore).toContain("--data-only");
     expect(restore).toContain("--single-transaction");
     expect(restore).toContain("--disable-triggers");

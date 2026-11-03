@@ -7,6 +7,7 @@
 -- migrations can write; do not FORCE ROW LEVEL SECURITY or that path breaks.
 -- The Supabase service_role also bypasses RLS. It may live only in Edge
 -- Function secrets or other server-side config, never in a client bundle.
+-- Triggers still fire for service_role. A missing auth.uid() is not a bypass.
 
 create schema if not exists private;
 
@@ -313,12 +314,8 @@ security definer
 set search_path = ''
 as $$
 begin
-  if old.status = 'voided'
-     and (
-       new.status is distinct from old.status
-       or new.void_reason is distinct from old.void_reason
-       or new.voided_at is distinct from old.voided_at
-     ) then
+  -- Any write, including a no-op and an updated_at bump, is rejected.
+  if old.status = 'voided' then
     raise exception 'a voided sale is frozen'
       using errcode = '42501';
   end if;
@@ -374,15 +371,30 @@ as $$
 declare
   parent_status text;
 begin
-  select s.status
-  into parent_status
-  from public.sales as s
-  where s.id = coalesce(new.sale_id, old.sale_id);
-  if parent_status is distinct from 'open' then
-    raise exception 'cannot change lines on a finished sale'
-      using errcode = '42501';
+  if tg_op in ('INSERT', 'UPDATE') then
+    select s.status
+    into parent_status
+    from public.sales as s
+    where s.id = new.sale_id;
+    if parent_status is distinct from 'open' then
+      raise exception 'cannot change lines on a finished sale'
+        using errcode = '42501';
+    end if;
   end if;
-  return coalesce(new, old);
+  if tg_op in ('UPDATE', 'DELETE') then
+    select s.status
+    into parent_status
+    from public.sales as s
+    where s.id = old.sale_id;
+    if parent_status is distinct from 'open' then
+      raise exception 'cannot change lines on a finished sale'
+        using errcode = '42501';
+    end if;
+  end if;
+  if tg_op = 'DELETE' then
+    return old;
+  end if;
+  return new;
 end;
 $$;
 
@@ -390,7 +402,7 @@ revoke all on function private.enforce_sale_item_open_sale() from public, anon;
 grant execute on function private.enforce_sale_item_open_sale() to authenticated, service_role;
 
 create trigger sale_items_require_open_sale
-before insert or update on public.sale_items
+before insert or update or delete on public.sale_items
 for each row execute function private.enforce_sale_item_open_sale();
 
 create or replace function private.enforce_credit_balance_owner()
@@ -399,12 +411,20 @@ language plpgsql
 security definer
 set search_path = ''
 as $$
+declare
+  -- SET ROLE leaves this GUC set even inside a security-definer function.
+  -- current_user here is the function owner, so it cannot tell service_role
+  -- from postgres. A null auth.uid() is not a bypass.
+  active_role text := pg_catalog.current_setting('role', true);
 begin
-  -- Seed and other server sessions have no end user. Staff sessions do.
-  if (select auth.uid()) is null then
+  if private.current_app_role() = 'owner'::public.app_role then
     return new;
   end if;
-  if private.current_app_role() = 'owner'::public.app_role then
+  if pg_catalog.current_setting('app.seed', true) = 'on' then
+    return new;
+  end if;
+  if session_user in ('postgres', 'supabase_admin')
+     and (active_role is null or active_role in ('none', '', 'postgres', 'supabase_admin')) then
     return new;
   end if;
   if tg_op = 'INSERT' and new.credit_balance_pesewas is distinct from 0 then

@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set search_path = extensions, public, pg_temp;
 
-select plan(2);
+select plan(5);
 
 insert into public.sales (
   id,
@@ -53,6 +53,41 @@ select throws_ok(
   '42501',
   'a voided sale is frozen',
   'voided_at cannot change after the sale is voided'
+);
+
+select throws_ok(
+  $$
+    update public.sales
+    set status = status
+    where id = '99999999-9999-4999-8999-999999999999'
+  $$,
+  '42501',
+  'a voided sale is frozen',
+  'a no-op status update is rejected on a voided sale'
+);
+
+select throws_ok(
+  $$
+    update public.sales
+    set updated_at = now()
+    where id = '99999999-9999-4999-8999-999999999999'
+  $$,
+  '42501',
+  'a voided sale is frozen',
+  'updated_at cannot change after the sale is voided'
+);
+
+set local role service_role;
+
+select throws_ok(
+  $$
+    update public.sales
+    set status = status
+    where id = '99999999-9999-4999-8999-999999999999'
+  $$,
+  '42501',
+  'a voided sale is frozen',
+  'service_role cannot update a voided sale'
 );
 
 select * from finish();
