@@ -1,0 +1,61 @@
+# Free Supabase projects pause after about a week without traffic.
+# Ping both projects twice a week so a shop closure, or one missed Monday,
+# does not pause them. PROD_DB_URL is read only inside the production environment.
+
+name: Keepalive
+
+on:
+  schedule:
+    - cron: "15 6 * * 1"
+    - cron: "15 6 * * 4"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  keepalive-staging:
+    name: keepalive-staging
+    runs-on: ubuntu-latest
+    environment: staging
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Ping staging
+        env:
+          DATABASE_URL: ${{ secrets.STAGING_DB_URL }}
+        run: npm run keepalive
+
+  keepalive-production:
+    name: keepalive-production
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Ping production
+        env:
+          DATABASE_URL: ${{ secrets.PROD_DB_URL }}
+        run: npm run keepalive

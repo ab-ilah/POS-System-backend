@@ -1,0 +1,40 @@
+{
+  "name": "pos-backend",
+  "version": "0.1.0",
+  "description": "Backend for a Ghana clothing-store POS. Supabase, integer pesewas, RLS.",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test:rls": "RUN_RLS=1 vitest run --config vitest.rls.config.ts",
+    "seed:generate": "tsx supabase/seed/generate.ts",
+    "secrets:scan": "tsx scripts/scan-secrets.ts",
+    "keepalive": "tsx scripts/keepalive.ts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ab-ilah/POS-System-backend.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/ab-ilah/POS-System-backend/issues"
+  },
+  "homepage": "https://github.com/ab-ilah/POS-System-backend#readme",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.15",
+    "eslint": "^10.14.0",
+    "postgres": "^3.4.7",
+    "supabase": "^3.0.0",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.72.1",
+    "vitest": "^4.0.18"
+  }
+}

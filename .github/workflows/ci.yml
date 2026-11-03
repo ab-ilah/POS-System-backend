@@ -1,0 +1,92 @@
+# Pull-request CI. This workflow must stay free of secrets.
+# It uses pull_request, never pull_request_target, so a fork PR cannot read
+# repository or environment secrets. The local Supabase keys printed by
+# `supabase start` are the public local demo keys, not the hosted projects.
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Install
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Typecheck edge function
+        run: deno check supabase/functions/health/index.ts
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Secret scan
+        env:
+          SECRET_SCAN_BASE: origin/${{ github.base_ref || 'main' }}
+        run: |
+          base="${{ github.base_ref || 'main' }}"
+          git fetch origin "$base"
+          npm run secrets:scan
+
+  rls:
+    name: rls
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Start local Supabase
+        run: npx supabase start
+
+      - name: Reset database
+        run: npx supabase db reset
+
+      - name: RLS suite
+        env:
+          # Public local demo connection. Not a hosted credential.
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+        run: npm run test:rls

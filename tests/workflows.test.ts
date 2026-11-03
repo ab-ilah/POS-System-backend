@@ -1,0 +1,75 @@
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import { describe, expect, it } from "vitest";
+
+const workflowDir = ".github/workflows";
+const workflows = Object.fromEntries(
+  readdirSync(workflowDir)
+    .filter((name) => name.endsWith(".yml"))
+    .map((name) => [name, readFileSync(join(workflowDir, name), "utf8")]),
+);
+
+describe("workflows", () => {
+  it("never uses pull_request_target", () => {
+    for (const [name, text] of Object.entries(workflows)) {
+      expect(text, name).not.toMatch(/^\s*pull_request_target\s*:/m);
+    }
+  });
+
+  it("runs the PR checks without deploy secrets", () => {
+    const ci = workflows["ci.yml"];
+    expect(ci).toBeDefined();
+    expect(ci).not.toMatch(/\$\{\{\s*secrets\./);
+    expect(ci).toContain("npm run typecheck");
+    expect(ci).toContain("npm run lint");
+    expect(ci).toContain("npm test");
+    expect(ci).toContain("npm run secrets:scan");
+    expect(ci).toContain("supabase start");
+    expect(ci).toContain("supabase db reset");
+    expect(ci).toContain("npm run test:rls");
+    expect(ci).toContain("pull_request:");
+  });
+
+  it("pushes staging on main and keeps production manual", () => {
+    const deploy = workflows["deploy-db.yml"];
+    expect(deploy).toBeDefined();
+    expect(deploy).toContain("environment: staging");
+    expect(deploy).toContain("environment: production");
+    expect(deploy).toContain("STAGING_DB_URL");
+    expect(deploy).toContain("PROD_DB_URL");
+    expect(deploy).toContain("supabase db push");
+    expect(deploy).not.toContain("include-seed");
+    expect(deploy).not.toContain("--include-seed");
+    const production = deploy?.split("deploy-production:")[1] ?? "";
+    expect(production).toContain("PROD_DB_URL");
+    expect(production).not.toContain("STAGING_DB_URL");
+    expect(production).toContain("workflow_dispatch");
+  });
+
+  it("pings staging and production on a schedule", () => {
+    const keepalive = workflows["keepalive.yml"];
+    expect(keepalive).toBeDefined();
+    expect(keepalive).toContain("schedule:");
+    expect(keepalive).toContain("STAGING_DB_URL");
+    expect(keepalive).toContain("PROD_DB_URL");
+    const production = keepalive?.split("keepalive-production:")[1] ?? "";
+    expect(production).toContain("PROD_DB_URL");
+    expect(production).not.toContain("STAGING_DB_URL");
+  });
+
+  it("backs up to object storage and never to an Actions artifact", () => {
+    const backup = workflows["backup-db.yml"];
+    expect(backup).toBeDefined();
+    expect(backup).toContain("environment: production");
+    expect(backup).toContain("scripts/backup-database.sh");
+    expect(backup).toContain('cron: "0 2 * * *"');
+    expect(backup).not.toMatch(/uses:\s*\S*upload-artifact/);
+    const script = readFileSync("scripts/backup-database.sh", "utf8");
+    expect(script).toContain("pg_dump");
+    expect(script).toContain("--format=custom");
+    expect(script).toContain("age");
+    expect(script).toContain(".age");
+    expect(script).toContain("BACKUP_MIN_BYTES");
+    expect(script).not.toContain("upload-artifact");
+  });
+});
