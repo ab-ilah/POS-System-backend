@@ -4,10 +4,8 @@
 -- Passwords below are local fixtures (local-dev-only) and are not hosted secrets.
 -- credit_balance_pesewas is the amount the customer currently owes the shop.
 -- Historical sales are a snapshot. They do not post again into that balance.
--- app.seed is transaction-local. supabase db reset wraps this file in one transaction.
--- The service role does not set this flag, and a null auth.uid() is not a bypass.
-
-set local app.seed = 'on';
+-- supabase db reset applies this file as postgres with no SET ROLE. That session
+-- may set credit balances. There is no seed flag a staff or service session can turn on.
 
 insert into auth.users (
   instance_id,

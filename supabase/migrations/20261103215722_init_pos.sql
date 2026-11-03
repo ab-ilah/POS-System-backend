@@ -178,27 +178,8 @@ create trigger sales_touch_updated_at
 before update on public.sales
 for each row execute function private.touch_updated_at();
 
-create or replace function private.current_app_role()
-returns public.app_role
-language sql
-stable
-security definer
-set search_path = ''
-as $$
-  select case
-    when u.raw_app_meta_data ->> 'role' in ('owner', 'manager', 'cashier')
-      then (u.raw_app_meta_data ->> 'role')::public.app_role
-    else null
-  end
-  from auth.users as u
-  where u.id = (select auth.uid())
-$$;
-
-comment on function private.current_app_role() is
-  'Role from auth.users.raw_app_meta_data. Null means no access. Never read user_metadata.';
-
--- Internal lookup. Not granted to authenticated or anon, so it is not an RPC.
-create or replace function private.staff_role(target uuid)
+-- Reads app_metadata for a user id. This does not decide whether the caller is that user.
+create or replace function private.app_role_of(target uuid)
 returns public.app_role
 language sql
 stable
@@ -214,11 +195,69 @@ as $$
   where u.id = target
 $$;
 
+-- Security invoker so current_user is the session that issued the statement.
+-- Inside a security-definer function, current_user is the owner instead.
+create or replace function private.session_is_trusted_db()
+returns boolean
+language sql
+stable
+security invoker
+set search_path = ''
+as $$
+  select session_user in ('postgres', 'supabase_admin')
+     and current_user = session_user
+$$;
+
+create or replace function private.session_is_authenticated_staff()
+returns boolean
+language sql
+stable
+security invoker
+set search_path = ''
+as $$
+  select current_user = 'authenticated'
+     and coalesce((select auth.jwt() ->> 'role'), '') = 'authenticated'
+$$;
+
+create or replace function private.current_app_role()
+returns public.app_role
+language plpgsql
+stable
+security invoker
+set search_path = ''
+as $$
+begin
+  if not private.session_is_authenticated_staff() then
+    return null;
+  end if;
+  return private.app_role_of((select auth.uid()));
+end;
+$$;
+
+comment on function private.current_app_role() is
+  'Role from auth.users.raw_app_meta_data for an authenticated session. A service_role JWT is not a staff session, even when its subject is an owner id. Never read user_metadata.';
+
+-- Internal lookup. Not an API. Returns null unless the caller is an authenticated staff session.
+create or replace function private.staff_role(target uuid)
+returns public.app_role
+language plpgsql
+stable
+security invoker
+set search_path = ''
+as $$
+begin
+  if not (private.session_is_trusted_db() or private.session_is_authenticated_staff()) then
+    return null;
+  end if;
+  return private.app_role_of(target);
+end;
+$$;
+
 create or replace function private.caller_may_update_profile(target uuid)
 returns boolean
 language sql
 stable
-security definer
+security invoker
 set search_path = ''
 as $$
   select
@@ -233,12 +272,19 @@ as $$
     )
 $$;
 
+revoke all on function private.app_role_of(uuid) from public, anon, authenticated, service_role;
 revoke all on function private.current_app_role() from public, anon;
+revoke all on function private.session_is_trusted_db() from public, anon;
+revoke all on function private.session_is_authenticated_staff() from public, anon;
 revoke all on function private.staff_role(uuid) from public, anon, authenticated;
 revoke all on function private.caller_may_update_profile(uuid) from public, anon;
 revoke all on function private.touch_updated_at() from public, anon;
 
+grant execute on function private.app_role_of(uuid) to authenticated;
 grant execute on function private.current_app_role() to authenticated, service_role;
+grant execute on function private.session_is_trusted_db() to authenticated, service_role;
+grant execute on function private.session_is_authenticated_staff() to authenticated, service_role;
+grant execute on function private.staff_role(uuid) to authenticated;
 grant execute on function private.caller_may_update_profile(uuid) to authenticated, service_role;
 grant execute on function private.touch_updated_at() to authenticated, service_role;
 
@@ -265,8 +311,10 @@ create trigger on_auth_user_created
 after insert on auth.users
 for each row execute function private.handle_new_user();
 
--- Owner or manager assigns a role by writing app_metadata. Signup does not.
-create or replace function public.assign_staff_role(target uuid, new_role public.app_role)
+-- Writes app_metadata. Callers cannot use this to skip the authenticated-session check:
+-- current_user inside this definer is the owner, so the caller's role is the SET ROLE
+-- value, which is the same role current_user had in the invoker.
+create or replace function private.write_staff_role(target uuid, new_role public.app_role)
 returns void
 language plpgsql
 security definer
@@ -276,12 +324,17 @@ declare
   caller public.app_role;
   existing public.app_role;
 begin
-  caller := private.current_app_role();
+  if pg_catalog.current_setting('role', true) is distinct from 'authenticated'
+     or coalesce((select auth.jwt() ->> 'role'), '') is distinct from 'authenticated' then
+    raise exception 'only an owner or manager can assign a staff role'
+      using errcode = '42501';
+  end if;
+  caller := private.app_role_of((select auth.uid()));
   if caller is null or caller not in ('owner'::public.app_role, 'manager'::public.app_role) then
     raise exception 'only an owner or manager can assign a staff role'
       using errcode = '42501';
   end if;
-  existing := private.staff_role(target);
+  existing := private.app_role_of(target);
   if caller = 'manager'::public.app_role and existing = 'owner'::public.app_role then
     raise exception 'a manager cannot change the owner'
       using errcode = '42501';
@@ -304,19 +357,67 @@ begin
 end;
 $$;
 
+revoke all on function private.write_staff_role(uuid, public.app_role) from public, anon, authenticated, service_role;
+grant execute on function private.write_staff_role(uuid, public.app_role) to authenticated;
+
+-- Owner or manager assigns a role by writing app_metadata. Signup does not.
+create or replace function public.assign_staff_role(target uuid, new_role public.app_role)
+returns void
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+declare
+  caller public.app_role;
+  existing public.app_role;
+begin
+  if current_user is distinct from 'authenticated'
+     or coalesce((select auth.jwt() ->> 'role'), '') is distinct from 'authenticated' then
+    raise exception 'only an owner or manager can assign a staff role'
+      using errcode = '42501';
+  end if;
+  caller := private.current_app_role();
+  if caller is null or caller not in ('owner'::public.app_role, 'manager'::public.app_role) then
+    raise exception 'only an owner or manager can assign a staff role'
+      using errcode = '42501';
+  end if;
+  existing := private.staff_role(target);
+  if caller = 'manager'::public.app_role and existing = 'owner'::public.app_role then
+    raise exception 'a manager cannot change the owner'
+      using errcode = '42501';
+  end if;
+  if caller = 'manager'::public.app_role and new_role = 'owner'::public.app_role then
+    raise exception 'a manager cannot assign the owner role'
+      using errcode = '42501';
+  end if;
+  perform private.write_staff_role(target, new_role);
+end;
+$$;
+
 revoke all on function public.assign_staff_role(uuid, public.app_role) from public, anon;
-grant execute on function public.assign_staff_role(uuid, public.app_role) to authenticated;
+grant execute on function public.assign_staff_role(uuid, public.app_role) to authenticated, service_role;
 
 create or replace function private.enforce_sale_update()
 returns trigger
 language plpgsql
-security definer
+security invoker
 set search_path = ''
 as $$
 begin
   -- Any write, including a no-op and an updated_at bump, is rejected.
   if old.status = 'voided' then
     raise exception 'a voided sale is frozen'
+      using errcode = '42501';
+  end if;
+  if not (
+    private.session_is_trusted_db()
+    or (
+      current_user = 'authenticated'
+      and coalesce((select auth.jwt() ->> 'role'), '') = 'authenticated'
+      and private.current_app_role() in ('owner'::public.app_role, 'manager'::public.app_role)
+    )
+  ) then
+    raise exception 'only an owner or manager can update a sale'
       using errcode = '42501';
   end if;
   if new.receipt_no is distinct from old.receipt_no
@@ -408,23 +509,18 @@ for each row execute function private.enforce_sale_item_open_sale();
 create or replace function private.enforce_credit_balance_owner()
 returns trigger
 language plpgsql
-security definer
+security invoker
 set search_path = ''
 as $$
-declare
-  -- SET ROLE leaves this GUC set even inside a security-definer function.
-  -- current_user here is the function owner, so it cannot tell service_role
-  -- from postgres. A null auth.uid() is not a bypass.
-  active_role text := pg_catalog.current_setting('role', true);
 begin
-  if private.current_app_role() = 'owner'::public.app_role then
+  -- Migrations and seed run as postgres or supabase_admin with no SET ROLE.
+  -- A service_role JWT is a different current_user even when its subject is the owner.
+  if session_user in ('postgres', 'supabase_admin') and current_user = session_user then
     return new;
   end if;
-  if pg_catalog.current_setting('app.seed', true) = 'on' then
-    return new;
-  end if;
-  if session_user in ('postgres', 'supabase_admin')
-     and (active_role is null or active_role in ('none', '', 'postgres', 'supabase_admin')) then
+  if current_user = 'authenticated'
+     and coalesce((select auth.jwt() ->> 'role'), '') = 'authenticated'
+     and private.current_app_role() = 'owner'::public.app_role then
     return new;
   end if;
   if tg_op = 'INSERT' and new.credit_balance_pesewas is distinct from 0 then

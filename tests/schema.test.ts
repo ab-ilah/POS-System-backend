@@ -31,6 +31,10 @@ describe("schema", () => {
     expect(migration).not.toContain("private.profile_role");
     expect(migration).toContain("raw_app_meta_data ->> 'role'");
     expect(migration).toContain("assign_staff_role");
+    expect(migration).toContain("current_user = 'authenticated'");
+    expect(migration).toContain("auth.jwt() ->> 'role'");
+    expect(migration).toContain("current_user = session_user");
+    expect(migration).not.toContain("app.seed");
     expect(migration).toContain("revoke all on function private.staff_role(uuid) from public, anon, authenticated");
   });
 

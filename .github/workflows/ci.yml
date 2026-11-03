@@ -99,6 +99,15 @@ jobs:
       - name: Reset database
         run: npx supabase db reset
 
+      - name: PostgREST credit role check
+        run: |
+          eval "$(npx supabase status -o env)"
+          if [ -z "${API_URL:-}" ] && [ -n "${SUPABASE_URL:-}" ]; then
+            API_URL="$SUPABASE_URL"
+          fi
+          export API_URL
+          npx tsx scripts/check-credit-postgrest.ts
+
       - name: pgTAP
         run: npx supabase test db
 

@@ -76,9 +76,9 @@ export const PERMISSION_SCOPE_NOTES: Readonly<Record<TableName, string>> = {
   product_variants:
     "Same catalogue rules as products. Shelf prices are integers in pesewas and already include tax.",
   customers:
-    "Cashiers can register a customer at a zero credit balance and update name and phone. Only the owner can set or change credit_balance_pesewas. A missing user id, including the service role, is not a bypass. Cashiers cannot delete a customer.",
+    "Cashiers can register a customer at a zero credit balance and update name and phone. Only an authenticated owner can set or change credit_balance_pesewas. A service-role JWT is denied even when its subject is the owner. Cashiers cannot delete a customer.",
   sales:
-    "Any staff member can record a sale attributed to themselves. Owner and manager can complete an open sale or void a sale. Amounts stay immutable. Once a sale is voided, every update is rejected. Nobody deletes a sale.",
+    "Any staff member can record a sale attributed to themselves. An authenticated owner or manager can complete an open sale or void a sale. Amounts stay immutable. Once a sale is voided, every update is rejected. Nobody deletes a sale.",
   sale_items:
     "A line can be inserted only on an open sale whose cashier is the signed-in staff member. Completed and voided sales reject new lines, line edits, line deletes, and moving a line to another sale. Corrections are a void plus a new sale.",
 };
