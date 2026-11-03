@@ -44,7 +44,38 @@ There are two restores. Do not ask pg_restore to drop existing objects first. On
 
 Run `pg_restore` as `supabase_admin` (or another role that can disable triggers). Pass `--disable-triggers` so historical lines on completed sales can load. The finished-sale trigger is still there afterwards. Pass `--single-transaction` so a failed restore rolls back instead of stopping in the middle. The client must be at least the server major.
 
-**Empty application schema.** The Supabase project is up, `auth` exists, and `public` does not yet contain these tables (a new local stack before `db reset`, or after you have dropped `private`, the application tables, and `public.app_role`). This loads schema and data, including `private` and the enum:
+**Empty application schema.** The Supabase project is up, `auth` exists, and `public` does not yet contain these tables (a new local stack before `db reset`, or after you have dropped `private`, the application tables, and `public.app_role`).
+
+Create the auth users before the restore. `profiles.id` references `auth.users`, and this dump does not include `auth`. For every profile id in the dump, insert an `auth.users` row with that same id. A placeholder email is enough when the original auth row is not in the dump. Token columns must be empty strings, not null.
+
+```bash
+pg_restore --data-only --table=profiles --file=profiles.sql pos.dump
+```
+
+Use each id from that file:
+
+```sql
+insert into auth.users (
+  instance_id, id, aud, role, email,
+  raw_app_meta_data, raw_user_meta_data,
+  created_at, updated_at,
+  confirmation_token, recovery_token,
+  email_change, email_change_token_new, email_change_token_current,
+  phone_change, phone_change_token, reauthentication_token
+) values (
+  '00000000-0000-0000-0000-000000000000',
+  '<profile-id>',
+  'authenticated',
+  'authenticated',
+  '<profile-id>@restore.invalid',
+  '{"provider":"email","providers":["email"]}'::jsonb,
+  '{}'::jsonb,
+  now(), now(),
+  '', '', '', '', '', '', '', ''
+);
+```
+
+Then load schema and data, including `private` and the enum:
 
 ```bash
 pg_restore -l pos.dump | grep -v -E 'SCHEMA - public |COMMENT - SCHEMA public ' > restore.list

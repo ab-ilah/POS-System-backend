@@ -12,6 +12,8 @@ describe("restore and operations docs", () => {
     expect(restore).toContain("--data-only");
     expect(restore).toContain("--single-transaction");
     expect(restore).toContain("--disable-triggers");
+    expect(restore).toContain("auth.users");
+    expect(restore).toContain("<profile-id>");
     expect(restore).toContain("--force-path-style");
     expect(restore).not.toContain("--clean");
     expect(restore).not.toContain("--if-exists");

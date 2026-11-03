@@ -3,6 +3,8 @@
 # GitHub cannot name the reviewer inside this file. Gabriel must set himself
 # as a required reviewer on the production environment. See docs/branch-protection.md.
 # This workflow does not load seed data.
+# supabase CLI 3.0.0 accepts a database URL as --remote=<url>.
+# The older database-url flag still runs, prints a deprecation warning, and is removed in v4.
 
 name: Deploy database
 
@@ -29,18 +31,16 @@ concurrency:
 jobs:
   deploy-staging:
     name: deploy-staging
-    if: |
-      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
-      (github.event_name == 'workflow_dispatch' && inputs.target == 'staging')
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.target == 'staging'))
     runs-on: ubuntu-latest
     environment: staging
     timeout-minutes: 20
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: npm
@@ -69,10 +69,10 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: npm

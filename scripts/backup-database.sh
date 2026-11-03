@@ -86,12 +86,20 @@ try {
 NODE
 )
 
-echo "dumping with postgres:${major}"
+# postgres:17 digest pinned 2026-11-03. config.toml sets major_version = 17.
+# If the server major changes, update this digest before the next backup.
+postgres_17_image="postgres@sha256:3b0cda93be7c8dba2ed484d19393d93845dc3dafb88973e248ba8e6d99d784e1"
+if [ "$major" != "17" ]; then
+  echo "server major is ${major}; the backup client is pinned to Postgres 17 (${postgres_17_image})" >&2
+  exit 1
+fi
+
+echo "dumping with ${postgres_17_image}"
 docker run --rm --network host \
   -e PROD_DB_URL \
   -v "${workdir}:/out" \
   --entrypoint bash \
-  "postgres:${major}" \
+  "$postgres_17_image" \
   -c 'pg_dump --format=custom --no-owner --no-privileges --file=/out/pos.dump --dbname="$PROD_DB_URL"'
 
 if [ ! -s "$plaintext" ]; then

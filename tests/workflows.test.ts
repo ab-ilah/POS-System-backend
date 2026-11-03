@@ -10,6 +10,17 @@ const workflows = Object.fromEntries(
 );
 
 describe("workflows", () => {
+  it("pins actions to full commit SHAs", () => {
+    for (const [name, text] of Object.entries(workflows)) {
+      const uses = text.match(/^[\s-]*uses:.*$/gm) ?? [];
+      expect(uses.length, name).toBeGreaterThan(0);
+      for (const line of uses) {
+        expect(line, `${name}: ${line}`).toMatch(/@[0-9a-f]{40}/);
+        expect(line, `${name}: ${line}`).not.toMatch(/@v\d/);
+      }
+    }
+  });
+
   it("never uses pull_request_target", () => {
     for (const [name, text] of Object.entries(workflows)) {
       expect(text, name).not.toMatch(/^\s*pull_request_target\s*:/m);
@@ -28,6 +39,8 @@ describe("workflows", () => {
     expect(ci).toContain("supabase db reset");
     expect(ci).toContain("npm run test:rls");
     expect(ci).toContain("supabase test db");
+    expect(ci).toContain("supabase db push --dry-run --yes --remote=");
+    expect(ci).toContain("--remote[=<ref|branch|url>]");
     expect(ci).toContain("scripts/restore-drill.sh");
     expect(ci).toContain("pull_request:");
   });
@@ -41,9 +54,13 @@ describe("workflows", () => {
     expect(deploy).toContain("PROD_DB_URL");
     expect(deploy).toContain("npm run auth:disable-signup");
     expect(deploy).toContain("hnbvmxebzaocdttlteib");
+    expect(deploy).toContain("supabase db push --yes --remote=");
+    expect(deploy).not.toContain("--db-url");
     expect(deploy).toContain("supabase db push");
     expect(deploy).not.toContain("include-seed");
     expect(deploy).not.toContain("--include-seed");
+    const staging = (deploy?.split("deploy-staging:")[1] ?? "").split("deploy-production:")[0] ?? "";
+    expect(staging).toContain("github.ref == 'refs/heads/main'");
     const production = deploy?.split("deploy-production:")[1] ?? "";
     expect(production).toContain("PROD_DB_URL");
     expect(production).not.toContain("STAGING_DB_URL");
@@ -61,6 +78,8 @@ describe("workflows", () => {
     expect(ping).toContain("public.products");
     expect(ping).toContain("public.customers");
     expect(ping).toContain("public.sales");
+    const stagingKeepalive = (keepalive?.split("keepalive-staging:")[1] ?? "").split("keepalive-production:")[0] ?? "";
+    expect(stagingKeepalive).toContain("github.ref == 'refs/heads/main'");
     expect(keepalive).toContain("STAGING_DB_URL");
     expect(keepalive).toContain("PROD_DB_URL");
     const production = keepalive?.split("keepalive-production:")[1] ?? "";
@@ -86,6 +105,7 @@ describe("workflows", () => {
     expect(script).toContain("age");
     expect(script).toContain(".age");
     expect(script).toContain("BACKUP_MIN_BYTES");
+    expect(script).toContain("postgres@sha256:");
     expect(script).not.toContain("upload-artifact");
   });
 });

@@ -313,6 +313,15 @@ security definer
 set search_path = ''
 as $$
 begin
+  if old.status = 'voided'
+     and (
+       new.status is distinct from old.status
+       or new.void_reason is distinct from old.void_reason
+       or new.voided_at is distinct from old.voided_at
+     ) then
+    raise exception 'a voided sale is frozen'
+      using errcode = '42501';
+  end if;
   if new.receipt_no is distinct from old.receipt_no
      or new.customer_id is distinct from old.customer_id
      or new.cashier_id is distinct from old.cashier_id
@@ -391,9 +400,20 @@ security definer
 set search_path = ''
 as $$
 begin
-  if new.credit_balance_pesewas is distinct from old.credit_balance_pesewas
-     and private.current_app_role() is distinct from 'owner'::public.app_role then
-    raise exception 'only the owner can change a credit balance'
+  -- Seed and other server sessions have no end user. Staff sessions do.
+  if (select auth.uid()) is null then
+    return new;
+  end if;
+  if private.current_app_role() = 'owner'::public.app_role then
+    return new;
+  end if;
+  if tg_op = 'INSERT' and new.credit_balance_pesewas is distinct from 0 then
+    raise exception 'only the owner can set a credit balance'
+      using errcode = '42501';
+  end if;
+  if tg_op = 'UPDATE'
+     and new.credit_balance_pesewas is distinct from old.credit_balance_pesewas then
+    raise exception 'only the owner can set a credit balance'
       using errcode = '42501';
   end if;
   return new;
@@ -404,7 +424,7 @@ revoke all on function private.enforce_credit_balance_owner() from public, anon;
 grant execute on function private.enforce_credit_balance_owner() to authenticated, service_role;
 
 create trigger customers_enforce_credit_owner
-before update on public.customers
+before insert or update on public.customers
 for each row execute function private.enforce_credit_balance_owner();
 
 alter table public.profiles enable row level security;
@@ -432,7 +452,7 @@ grant select, insert, update, delete on table
   public.sale_items
 to authenticated, service_role;
 
--- A sale update may void it. Amounts and identity columns stay immutable.
+-- A sale update may complete an open sale or void it. Amounts and identity columns stay immutable.
 revoke update on table public.sales from authenticated;
 grant update (status, void_reason, voided_at, updated_at) on table public.sales to authenticated;
 

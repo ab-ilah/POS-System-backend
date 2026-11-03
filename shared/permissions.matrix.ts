@@ -76,9 +76,9 @@ export const PERMISSION_SCOPE_NOTES: Readonly<Record<TableName, string>> = {
   product_variants:
     "Same catalogue rules as products. Shelf prices are integers in pesewas and already include tax.",
   customers:
-    "Cashiers can register a customer and update name and phone. Only the owner can change credit_balance_pesewas. Cashiers cannot delete a customer.",
+    "Cashiers can register a customer at a zero credit balance and update name and phone. Only the owner can set or change credit_balance_pesewas. Cashiers cannot delete a customer.",
   sales:
-    "Any staff member can record a sale attributed to themselves. Owner and manager can void a sale (status, void reason, void timestamp). Amounts and the rest of the row are immutable. Nobody deletes a sale.",
+    "Any staff member can record a sale attributed to themselves. Owner and manager can complete an open sale or void a sale. Amounts stay immutable, and a voided sale cannot be edited again. Nobody deletes a sale.",
   sale_items:
     "A line can be inserted only on an open sale whose cashier is the signed-in staff member. Completed and voided sales reject new lines and line edits. Corrections are a void plus a new sale.",
 };
