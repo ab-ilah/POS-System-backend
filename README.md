@@ -40,7 +40,7 @@ Seed staff (local database fixtures, one per role):
 | `cashier@example.com` | cashier |
 | `spare.cashier@example.com` | cashier, deleted by the RLS suite and rolled back |
 
-The seed inserts `auth.users` and `profiles`. It does not insert `auth.identities`, because that table is owned by `supabase_admin` and the seed role cannot write it. The RLS suite does not log in through GoTrue. It sets the user id on the database session. `encrypted_password` is still `local-dev-only` so a later auth-admin step can attach an identity without inventing a new password. Do not treat these rows as hosted accounts.
+The seed inserts `auth.users` (with `raw_app_meta_data.role`) and `profiles`. It does not insert `auth.identities`, because that table is owned by `supabase_admin` and the seed role cannot write it. The RLS suite does not log in through GoTrue. It sets the user id on the database session. `encrypted_password` is still `local-dev-only` so a later auth-admin step can attach an identity without inventing a new password. Do not treat these rows as hosted accounts.
 
 Do not load this seed on staging or production. The deploy workflow does not pass `--include-seed`.
 
@@ -65,11 +65,13 @@ The health edge function returns `{ "ok": true }` and reads no tables. `verify_j
 
 ## Roles
 
-`shared/permissions.matrix.ts` is the matrix: one row per role (`owner`, `manager`, `cashier`) per table per operation, each `allow` or `deny`. It imports nothing. Row scope that a boolean cannot express (a cashier sees only their own profile, only the owner changes roles, sales are attributed to the signed-in staff member, sale lines are immutable) is in `PERMISSION_SCOPE_NOTES` and in the SQL policies. CI signs in as each seed user and checks every row. A mismatch fails the `rls` job.
+`shared/permissions.matrix.ts` exports `PERMISSIONS_MATRIX`. Each row is `{ role, table, operation, decision }` and `decision` is `allow` or `deny`. It imports nothing. Row scope that a boolean cannot express is in `PERMISSION_SCOPE_NOTES` and in the SQL policies: a user with no role sees nothing, a cashier sees only their own profile, a line can be added only to that staff member's own sale, a sale update can only void it, and only the owner can change `credit_balance_pesewas`. CI checks every matrix row. A mismatch fails the `rls` job.
+
+The role itself lives in `auth.users.raw_app_meta_data.role` (`app_metadata` on the token after refresh). RLS reads that column, not `user_metadata`. Signup creates a profile and does not assign a role. An owner or manager assigns one with `public.assign_staff_role`. The first owner is a one-off server-side update: `docs/runbooks/bootstrap-owner.md`.
 
 ### How the frontend should consume the matrix
 
-Publish this file as a dependency-free package, recommended name `@pos/permissions`, and pin that version in `ab-ilah/POS-system-`. A permission change then shows up as a version bump the frontend can review. Copying the file by hand will drift from these RLS tests. Until the package is published, a copied file plus the backend git SHA in the frontend PR is only a bridge.
+Publish this file as a dependency-free package, recommended name `@pos/permissions`, and pin that version in `ab-ilah/POS-system-`. Import `PERMISSIONS_MATRIX` and read `row.decision`. A permission change then shows up as a version bump the frontend can review. Copying the file by hand will drift from these RLS tests. Until the package is published, a copied file plus the backend git SHA in the frontend PR is only a bridge. This shape change means any pin or copy taken from the first scaffold commit has to be re-synced after merge.
 
 ## Layout
 
@@ -99,12 +101,20 @@ Connection strings are the **session pooler** URI (host `*.pooler.supabase.com`,
 
 ### Environment `production`
 
-Required reviewer: Gabriel. That review also holds the nightly backup and the production keepalive, because GitHub attaches reviewers to the environment. See `docs/branch-protection.md` before relying on unattended runs.
+Required reviewer: Gabriel. Manual production migrations and the signup lock only. The job runs only from `main`.
 
 | Secret | Used by |
 | --- | --- |
-| `SUPABASE_ACCESS_TOKEN` | Deploy database (manual production) |
-| `PROD_DB_URL` | Deploy database, Keepalive, Backup database. Do not copy this into `staging`. |
+| `SUPABASE_ACCESS_TOKEN` | Deploy database, including the auth config call that sets `disable_signup` |
+| `PROD_DB_URL` | Deploy database. The same value is also on `prod-ops`. Do not copy it into `staging`. |
+
+### Environment `prod-ops`
+
+No required reviewer. Daily production keepalive and the nightly backup. Do not put the access token here, and do not use this environment for migrations.
+
+| Secret | Used by |
+| --- | --- |
+| `PROD_DB_URL` | Keepalive, Backup database |
 | `BACKUP_S3_ENDPOINT` | Backup database |
 | `BACKUP_S3_BUCKET` | Backup database |
 | `BACKUP_S3_REGION` | Backup database. `auto` for Cloudflare R2. |
@@ -122,13 +132,17 @@ Service-role and `sb_secret_` keys are not in this list. They do not belong in C
 | Workflow | When |
 | --- | --- |
 | `CI` | Pull requests and pushes to `main`. Install, typecheck, lint, unit tests, secret scan, `supabase start`, `supabase db reset`, RLS suite. |
-| `Deploy database` | Push to `main` migrates staging. Production is a manual run and waits on the production environment. |
-| `Keepalive` | Monday and Thursday, both projects, so a closure does not pause the Free plan. |
-| `Backup database` | 02:00 UTC, `main` only, production environment. |
+| `Deploy database` | Push to `main` migrates staging and turns signup off. Production is manual, from `main` only, and waits on the production environment. |
+| `Keepalive` | Every day at 06:15 UTC. Reads `products`, `customers`, and `sales`. Production uses `prod-ops`. |
+| `Backup database` | 02:00 UTC, `main` only, `prod-ops`. |
+
+Hosted signup is turned off by the deploy workflow (`docs/runbooks/disable-signup.md`). The manual dashboard step in that runbook is the fallback if the workflow cannot run.
 
 Runbooks:
 
 - `docs/branch-protection.md`
+- `docs/runbooks/bootstrap-owner.md`
+- `docs/runbooks/disable-signup.md`
 - `docs/runbooks/key-rotation.md`
 - `docs/runbooks/restore.md`
 - `docs/backup/README.md`

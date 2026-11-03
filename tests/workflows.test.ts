@@ -37,12 +37,16 @@ describe("workflows", () => {
     expect(deploy).toContain("environment: production");
     expect(deploy).toContain("STAGING_DB_URL");
     expect(deploy).toContain("PROD_DB_URL");
+    expect(deploy).toContain("npm run auth:disable-signup");
+    expect(deploy).toContain("hnbvmxebzaocdttlteib");
     expect(deploy).toContain("supabase db push");
     expect(deploy).not.toContain("include-seed");
     expect(deploy).not.toContain("--include-seed");
     const production = deploy?.split("deploy-production:")[1] ?? "";
     expect(production).toContain("PROD_DB_URL");
     expect(production).not.toContain("STAGING_DB_URL");
+    expect(production).toContain("refs/heads/main");
+    expect(production).toContain("vasbjwzykqoebbtvqnjx");
     expect(production).toContain("workflow_dispatch");
   });
 
@@ -50,9 +54,16 @@ describe("workflows", () => {
     const keepalive = workflows["keepalive.yml"];
     expect(keepalive).toBeDefined();
     expect(keepalive).toContain("schedule:");
+    expect(keepalive).toContain('cron: "15 6 * * *"');
+    const ping = readFileSync("scripts/keepalive.ts", "utf8");
+    expect(ping).toContain("public.products");
+    expect(ping).toContain("public.customers");
+    expect(ping).toContain("public.sales");
     expect(keepalive).toContain("STAGING_DB_URL");
     expect(keepalive).toContain("PROD_DB_URL");
     const production = keepalive?.split("keepalive-production:")[1] ?? "";
+    expect(production).toContain("environment: prod-ops");
+    expect(production).not.toContain("environment: production");
     expect(production).toContain("PROD_DB_URL");
     expect(production).not.toContain("STAGING_DB_URL");
   });
@@ -60,7 +71,8 @@ describe("workflows", () => {
   it("backs up to object storage and never to an Actions artifact", () => {
     const backup = workflows["backup-db.yml"];
     expect(backup).toBeDefined();
-    expect(backup).toContain("environment: production");
+    expect(backup).toContain("environment: prod-ops");
+    expect(backup).not.toContain("environment: production");
     expect(backup).toContain("scripts/backup-database.sh");
     expect(backup).toContain('cron: "0 2 * * *"');
     expect(backup).not.toMatch(/uses:\s*\S*upload-artifact/);

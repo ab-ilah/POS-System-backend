@@ -18,13 +18,12 @@ create type public.app_role as enum ('owner', 'manager', 'cashier');
 create table public.profiles (
   id uuid primary key references auth.users (id) on delete cascade,
   full_name text not null,
-  role public.app_role not null default 'cashier',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
 
 comment on table public.profiles is
-  'Staff profile. Role is the authorization source. Do not read role from user_metadata.';
+  'Staff profile. Authorization is auth.users.raw_app_meta_data.role. A new user has no role until an owner or manager assigns one.';
 
 create table public.products (
   id uuid primary key default gen_random_uuid(),
@@ -81,6 +80,8 @@ create table public.sales (
   customer_id uuid references public.customers (id) on delete restrict,
   cashier_id uuid not null references public.profiles (id) on delete restrict,
   status text not null default 'completed',
+  void_reason text,
+  voided_at timestamptz,
   subtotal_pesewas integer not null,
   total_pesewas integer not null,
   tendered_pesewas integer not null,
@@ -97,6 +98,19 @@ create table public.sales (
   constraint sales_credit_applied_pesewas_check check (credit_applied_pesewas >= 0),
   constraint sales_settlement_check check (
     tendered_pesewas + credit_applied_pesewas = total_pesewas + change_pesewas
+  ),
+  constraint sales_void_shape_check check (
+    (
+      status = 'completed'
+      and void_reason is null
+      and voided_at is null
+    )
+    or (
+      status = 'voided'
+      and void_reason is not null
+      and length(btrim(void_reason)) > 0
+      and voided_at is not null
+    )
   )
 );
 
@@ -170,59 +184,62 @@ stable
 security definer
 set search_path = ''
 as $$
-  select p.role
-  from public.profiles as p
-  where p.id = (select auth.uid())
+  select case
+    when u.raw_app_meta_data ->> 'role' in ('owner', 'manager', 'cashier')
+      then (u.raw_app_meta_data ->> 'role')::public.app_role
+    else null
+  end
+  from auth.users as u
+  where u.id = (select auth.uid())
 $$;
 
 comment on function private.current_app_role() is
-  'Staff role from profiles. Not from user_metadata, which the account holder can edit.';
+  'Role from auth.users.raw_app_meta_data. Null means no access. Never read user_metadata.';
 
-create or replace function private.profile_role(target uuid)
+-- Internal lookup. Not granted to authenticated or anon, so it is not an RPC.
+create or replace function private.staff_role(target uuid)
 returns public.app_role
 language sql
 stable
 security definer
 set search_path = ''
 as $$
-  select p.role
-  from public.profiles as p
-  where p.id = target
+  select case
+    when u.raw_app_meta_data ->> 'role' in ('owner', 'manager', 'cashier')
+      then (u.raw_app_meta_data ->> 'role')::public.app_role
+    else null
+  end
+  from auth.users as u
+  where u.id = target
 $$;
 
-revoke all on function private.current_app_role() from public, anon;
-revoke all on function private.profile_role(uuid) from public, anon;
-revoke all on function private.touch_updated_at() from public, anon;
-
-grant execute on function private.current_app_role() to authenticated, service_role;
-grant execute on function private.profile_role(uuid) to authenticated, service_role;
-grant execute on function private.touch_updated_at() to authenticated, service_role;
-
-create or replace function private.enforce_profile_role_change()
-returns trigger
-language plpgsql
+create or replace function private.caller_may_update_profile(target uuid)
+returns boolean
+language sql
+stable
 security definer
 set search_path = ''
 as $$
-begin
-  -- Seed and other server-side sessions have no end-user id. They may set the
-  -- initial role. A signed-in staff member may change a role only as owner.
-  if new.role is distinct from old.role
-     and (select auth.uid()) is not null
-     and private.current_app_role() is distinct from 'owner'::public.app_role then
-    raise exception 'only the owner can change a staff role'
-      using errcode = '42501';
-  end if;
-  return new;
-end;
+  select
+    private.current_app_role() = 'owner'::public.app_role
+    or (
+      private.current_app_role() = 'manager'::public.app_role
+      and private.staff_role(target) is distinct from 'owner'::public.app_role
+    )
+    or (
+      private.current_app_role() = 'cashier'::public.app_role
+      and target = (select auth.uid())
+    )
 $$;
 
-revoke all on function private.enforce_profile_role_change() from public, anon;
-grant execute on function private.enforce_profile_role_change() to authenticated, service_role;
+revoke all on function private.current_app_role() from public, anon;
+revoke all on function private.staff_role(uuid) from public, anon, authenticated;
+revoke all on function private.caller_may_update_profile(uuid) from public, anon;
+revoke all on function private.touch_updated_at() from public, anon;
 
-create trigger profiles_enforce_role_change
-before update on public.profiles
-for each row execute function private.enforce_profile_role_change();
+grant execute on function private.current_app_role() to authenticated, service_role;
+grant execute on function private.caller_may_update_profile(uuid) to authenticated, service_role;
+grant execute on function private.touch_updated_at() to authenticated, service_role;
 
 create or replace function private.handle_new_user()
 returns trigger
@@ -231,11 +248,10 @@ security definer
 set search_path = ''
 as $$
 begin
-  insert into public.profiles (id, full_name, role)
+  insert into public.profiles (id, full_name)
   values (
     new.id,
-    coalesce(nullif(new.raw_user_meta_data ->> 'full_name', ''), 'Staff'),
-    'cashier'
+    coalesce(nullif(new.raw_user_meta_data ->> 'full_name', ''), 'Staff')
   );
   return new;
 end;
@@ -247,6 +263,114 @@ grant execute on function private.handle_new_user() to supabase_auth_admin, post
 create trigger on_auth_user_created
 after insert on auth.users
 for each row execute function private.handle_new_user();
+
+-- Owner or manager assigns a role by writing app_metadata. Signup does not.
+create or replace function public.assign_staff_role(target uuid, new_role public.app_role)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  caller public.app_role;
+  existing public.app_role;
+begin
+  caller := private.current_app_role();
+  if caller is null or caller not in ('owner'::public.app_role, 'manager'::public.app_role) then
+    raise exception 'only an owner or manager can assign a staff role'
+      using errcode = '42501';
+  end if;
+  existing := private.staff_role(target);
+  if caller = 'manager'::public.app_role and existing = 'owner'::public.app_role then
+    raise exception 'a manager cannot change the owner'
+      using errcode = '42501';
+  end if;
+  if caller = 'manager'::public.app_role and new_role = 'owner'::public.app_role then
+    raise exception 'a manager cannot assign the owner role'
+      using errcode = '42501';
+  end if;
+  update auth.users
+  set raw_app_meta_data =
+    case
+      when raw_app_meta_data is null then pg_catalog.jsonb_build_object('role', new_role)
+      else raw_app_meta_data || pg_catalog.jsonb_build_object('role', new_role)
+    end
+  where id = target;
+  if not found then
+    raise exception 'no such staff user'
+      using errcode = 'P0002';
+  end if;
+end;
+$$;
+
+revoke all on function public.assign_staff_role(uuid, public.app_role) from public, anon;
+grant execute on function public.assign_staff_role(uuid, public.app_role) to authenticated;
+
+create or replace function private.enforce_sale_update()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if new.receipt_no is distinct from old.receipt_no
+     or new.customer_id is distinct from old.customer_id
+     or new.cashier_id is distinct from old.cashier_id
+     or new.subtotal_pesewas is distinct from old.subtotal_pesewas
+     or new.total_pesewas is distinct from old.total_pesewas
+     or new.tendered_pesewas is distinct from old.tendered_pesewas
+     or new.change_pesewas is distinct from old.change_pesewas
+     or new.credit_applied_pesewas is distinct from old.credit_applied_pesewas
+     or new.sold_at is distinct from old.sold_at
+     or new.created_at is distinct from old.created_at
+  then
+    raise exception 'sale amounts and identity columns are immutable'
+      using errcode = '42501';
+  end if;
+  if new.status is distinct from old.status and new.status <> 'voided' then
+    raise exception 'a sale can only move to voided'
+      using errcode = '42501';
+  end if;
+  if new.status = 'voided' and (new.void_reason is null or length(btrim(new.void_reason)) = 0) then
+    raise exception 'voiding a sale requires a reason'
+      using errcode = '42501';
+  end if;
+  if new.status = 'voided' and old.status is distinct from 'voided' and new.voided_at is null then
+    new.voided_at := pg_catalog.now();
+  end if;
+  return new;
+end;
+$$;
+
+revoke all on function private.enforce_sale_update() from public, anon;
+grant execute on function private.enforce_sale_update() to authenticated, service_role;
+
+create trigger sales_enforce_void_only
+before update on public.sales
+for each row execute function private.enforce_sale_update();
+
+create or replace function private.enforce_credit_balance_owner()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if new.credit_balance_pesewas is distinct from old.credit_balance_pesewas
+     and private.current_app_role() is distinct from 'owner'::public.app_role then
+    raise exception 'only the owner can change a credit balance'
+      using errcode = '42501';
+  end if;
+  return new;
+end;
+$$;
+
+revoke all on function private.enforce_credit_balance_owner() from public, anon;
+grant execute on function private.enforce_credit_balance_owner() to authenticated, service_role;
+
+create trigger customers_enforce_credit_owner
+before update on public.customers
+for each row execute function private.enforce_credit_balance_owner();
 
 alter table public.profiles enable row level security;
 alter table public.products enable row level security;
@@ -273,6 +397,10 @@ grant select, insert, update, delete on table
   public.sale_items
 to authenticated, service_role;
 
+-- A sale update may void it. Amounts and identity columns stay immutable.
+revoke update on table public.sales from authenticated;
+grant update (status, void_reason, voided_at, updated_at) on table public.sales to authenticated;
+
 -- profiles: no insert policy. The auth trigger creates rows.
 create policy profiles_select
 on public.profiles
@@ -290,28 +418,8 @@ create policy profiles_update
 on public.profiles
 for update
 to authenticated
-using (
-  (select private.current_app_role()) = 'owner'
-  or (
-    (select private.current_app_role()) = 'manager'
-    and role <> 'owner'
-  )
-  or (
-    (select private.current_app_role()) = 'cashier'
-    and id = (select auth.uid())
-  )
-)
-with check (
-  (select private.current_app_role()) = 'owner'
-  or (
-    (select private.current_app_role()) = 'manager'
-    and role <> 'owner'
-  )
-  or (
-    (select private.current_app_role()) = 'cashier'
-    and id = (select auth.uid())
-  )
-);
+using ((select private.caller_may_update_profile(id)))
+with check ((select private.caller_may_update_profile(id)));
 
 create policy profiles_delete
 on public.profiles
@@ -426,4 +534,12 @@ create policy sale_items_insert
 on public.sale_items
 for insert
 to authenticated
-with check ((select private.current_app_role()) in ('owner', 'manager', 'cashier'));
+with check (
+  (select private.current_app_role()) in ('owner', 'manager', 'cashier')
+  and exists (
+    select 1
+    from public.sales as s
+    where s.id = sale_id
+      and s.cashier_id = (select auth.uid())
+  )
+);

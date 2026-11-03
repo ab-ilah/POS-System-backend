@@ -12,7 +12,11 @@ function everyInteger(values: number[]): boolean {
 describe("seed catalogue", () => {
   it("matches the committed seed.sql", () => {
     const committed = readFileSync("supabase/seed.sql", "utf8");
-    expect(committed).toBe(renderSeedSql(seed));
+    const rendered = renderSeedSql(seed);
+    expect(committed).toBe(rendered);
+    expect(rendered).toContain('"role":"owner"');
+    expect(rendered).toContain("insert into public.profiles (id, full_name)");
+    expect(rendered).not.toContain("::public.app_role");
   });
 
   it("has about forty clothing products across the shop categories", () => {

@@ -9,7 +9,8 @@
     "test:rls": "RUN_RLS=1 vitest run --config vitest.rls.config.ts",
     "seed:generate": "tsx supabase/seed/generate.ts",
     "secrets:scan": "tsx scripts/scan-secrets.ts",
-    "keepalive": "tsx scripts/keepalive.ts"
+    "keepalive": "tsx scripts/keepalive.ts",
+    "auth:disable-signup": "tsx scripts/disable-hosted-signup.ts"
   },
   "repository": {
     "type": "git",
@@ -35,6 +36,6 @@
     "tsx": "^4.20.6",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.72.1",
-    "vitest": "^4.0.18"
+    "vitest": "4.1.12"
   }
 }

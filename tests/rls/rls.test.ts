@@ -1,8 +1,8 @@
 import postgres, { type TransactionSql } from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
-  PERMISSIONS,
-  type Access,
+  PERMISSIONS_MATRIX,
+  type Decision,
   type Operation,
   type Role,
   type TableName,
@@ -34,7 +34,7 @@ function isDeny(error: unknown): boolean {
   );
 }
 
-function verdict(count: number): Access {
+function verdict(count: number): Decision {
   if (count === 1) return "allow";
   if (count === 0) return "deny";
   throw new Error(`expected 0 or 1 affected row, got ${String(count)}`);
@@ -102,8 +102,8 @@ async function selectCount(tx: Tx, table: TableName): Promise<number> {
 async function insertProbe(tx: Tx, table: TableName): Promise<void> {
   if (table === "profiles") {
     await tx`
-      insert into public.profiles (id, full_name, role)
-      values ('55555555-5555-4555-8555-555555555555'::uuid, 'RLS Probe', 'cashier')
+      insert into public.profiles (id, full_name)
+      values ('55555555-5555-4555-8555-555555555555'::uuid, 'RLS Probe')
     `;
     return;
   }
@@ -163,6 +163,34 @@ async function insertProbe(tx: Tx, table: TableName): Promise<void> {
     `;
     return;
   }
+  const created = await tx<{ id: string }[]>`
+    insert into public.sales (
+      receipt_no,
+      customer_id,
+      cashier_id,
+      status,
+      subtotal_pesewas,
+      total_pesewas,
+      tendered_pesewas,
+      change_pesewas,
+      credit_applied_pesewas
+    ) values (
+      'RLS-LINE-' || replace(gen_random_uuid()::text, '-', ''),
+      null,
+      (select auth.uid()),
+      'completed',
+      1000,
+      1000,
+      1000,
+      0,
+      0
+    )
+    returning id::text as id
+  `;
+  const saleId = created[0]?.id;
+  if (!saleId) {
+    throw new Error("own sale was not created");
+  }
   await tx`
     insert into public.sale_items (
       sale_id,
@@ -174,7 +202,7 @@ async function insertProbe(tx: Tx, table: TableName): Promise<void> {
       unit_price_pesewas,
       line_total_pesewas
     ) values (
-      ${model.targets.probeSaleId}::uuid,
+      ${saleId}::uuid,
       ${model.targets.probeVariantId}::uuid,
       'RLS Probe',
       'L',
@@ -224,7 +252,7 @@ async function updateProbe(tx: Tx, role: Role, table: TableName): Promise<number
   if (table === "sales") {
     const result = await tx`
       update public.sales
-      set status = 'voided'
+      set status = 'voided', void_reason = 'RLS probe void'
       where id = ${model.targets.updateSaleId}::uuid
     `;
     return Number(result.count);
@@ -280,7 +308,68 @@ async function deleteProbe(tx: Tx, table: TableName): Promise<number> {
   return Number(result.count);
 }
 
-async function probe(role: Role, table: TableName, operation: Operation): Promise<Access> {
+let freshUserNumber = 0;
+
+async function become(tx: Tx, userId: string): Promise<void> {
+  const claims = JSON.stringify({ sub: userId, role: "authenticated" });
+  await tx`select set_config('request.jwt.claims', ${claims}, true)`;
+  await tx`select set_config('request.jwt.claim.sub', ${userId}, true)`;
+  await tx`select set_config('request.jwt.claim.role', ${"authenticated"}, true)`;
+  await tx.unsafe("set local role authenticated");
+}
+
+async function withFreshUser<T>(
+  options: { appRole: string | null; userMetaRole?: string },
+  fn: (tx: Tx, userId: string) => Promise<T>,
+): Promise<T> {
+  freshUserNumber += 1;
+  const userId = `66666666-6666-4666-8666-${String(freshUserNumber).padStart(12, "0")}`;
+  const email = `fresh-${String(freshUserNumber)}@example.com`;
+  const appMeta = options.appRole
+    ? { provider: "email", providers: ["email"], role: options.appRole }
+    : { provider: "email", providers: ["email"] };
+  const userMeta = options.userMetaRole
+    ? { full_name: "Fresh Staff", role: options.userMetaRole }
+    : { full_name: "Fresh Staff" };
+  let value: T | undefined;
+  let done = false;
+  try {
+    await sql.begin(async (tx) => {
+      await tx`
+        insert into auth.users (
+          instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
+          raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
+          confirmation_token, recovery_token, email_change, email_change_token_new,
+          email_change_token_current, phone_change, phone_change_token, reauthentication_token
+        ) values (
+          '00000000-0000-0000-0000-000000000000',
+          ${userId}::uuid,
+          'authenticated',
+          'authenticated',
+          ${email},
+          extensions.crypt('local-dev-only', extensions.gen_salt('bf')),
+          now(),
+          ${sql.json(appMeta)},
+          ${sql.json(userMeta)},
+          now(),
+          now(),
+          '', '', '', '', '', '', '', ''
+        )
+      `;
+      value = await fn(tx as unknown as Tx, userId);
+      done = true;
+      throw new RollbackSignal();
+    });
+  } catch (error) {
+    if (error instanceof RollbackSignal && done) {
+      return value as T;
+    }
+    throw error;
+  }
+  throw new Error("transaction did not roll back");
+}
+
+async function probe(role: Role, table: TableName, operation: Operation): Promise<Decision> {
   const userId = userForRole(role).id;
   return asUser(userId, async (tx) => {
     if (operation === "select") {
@@ -316,10 +405,10 @@ describe("RLS matches the permission matrix", () => {
     }
   });
 
-  for (const row of PERMISSIONS) {
-    it(`${row.role} ${row.operation} ${row.table} is ${row.access}`, async () => {
+  for (const row of PERMISSIONS_MATRIX) {
+    it(`${row.role} ${row.operation} ${row.table} is ${row.decision}`, async () => {
       const actual = await probe(row.role, row.table, row.operation);
-      expect(actual).toBe(row.access);
+      expect(actual).toBe(row.decision);
     });
   }
 
@@ -351,38 +440,153 @@ describe("RLS matches the permission matrix", () => {
     expect(Number(result.count)).toBe(0);
   });
 
-  it("a cashier cannot change their own role", async () => {
-    const cashierId = userForRole("cashier").id;
+  it("a user with no role cannot read products", async () => {
+    const count = await withFreshUser({ appRole: null }, async (tx, userId) => {
+      await become(tx, userId);
+      const rows = await tx<{ n: number }[]>`select count(*)::int as n from public.products`;
+      return Number(rows[0]?.n ?? 0);
+    });
+    expect(count).toBe(0);
+  });
+
+  it("user_metadata cannot grant a role", async () => {
+    const role = await withFreshUser({ appRole: null, userMetaRole: "owner" }, async (tx, userId) => {
+      await become(tx, userId);
+      const rows = await tx<{ role: string | null }[]>`
+        select private.current_app_role()::text as role
+      `;
+      return rows[0]?.role ?? null;
+    });
+    expect(role).toBeNull();
+  });
+
+  it("a manager cannot change the existing owner", async () => {
     await expect(
-      asUser(cashierId, async (tx) => {
+      asUser(userForRole("manager").id, async (tx) => {
+        await tx`select public.assign_staff_role(${userForRole("owner").id}::uuid, 'cashier')`;
+      }),
+    ).rejects.toMatchObject({ code: "42501" });
+  });
+
+  it("a cashier cannot assign a staff role", async () => {
+    await expect(
+      asUser(userForRole("cashier").id, async (tx) => {
+        await tx`select public.assign_staff_role(${model.targets.disposableProfileId}::uuid, 'manager')`;
+      }),
+    ).rejects.toMatchObject({ code: "42501" });
+  });
+
+  it("a manager can assign cashier and cannot assign owner", async () => {
+    const assigned = await withFreshUser({ appRole: null }, async (tx, userId) => {
+      await become(tx, userForRole("manager").id);
+      await tx`select public.assign_staff_role(${userId}::uuid, 'cashier')`;
+      await become(tx, userId);
+      const rows = await tx<{ role: string | null }[]>`
+        select private.current_app_role()::text as role
+      `;
+      return rows[0]?.role ?? null;
+    });
+    expect(assigned).toBe("cashier");
+
+    await expect(
+      asUser(userForRole("manager").id, async (tx) => {
+        await tx`select public.assign_staff_role(${model.targets.disposableProfileId}::uuid, 'owner')`;
+      }),
+    ).rejects.toMatchObject({ code: "42501" });
+  });
+
+  it("the owner can assign a role through app_metadata", async () => {
+    const assigned = await withFreshUser({ appRole: null }, async (tx, userId) => {
+      await become(tx, userForRole("owner").id);
+      await tx`select public.assign_staff_role(${userId}::uuid, 'manager')`;
+      await become(tx, userId);
+      const rows = await tx<{ role: string | null }[]>`
+        select private.current_app_role()::text as role
+      `;
+      return rows[0]?.role ?? null;
+    });
+    expect(assigned).toBe("manager");
+  });
+
+  it("a cashier cannot add a line to someone else's sale", async () => {
+    const managerSaleId = model.sales.find((sale) => sale.cashierId === userForRole("manager").id)?.id;
+    if (!managerSaleId) {
+      throw new Error("seed is missing a manager sale");
+    }
+    await expect(
+      asUser(userForRole("cashier").id, async (tx) => {
         await tx`
-          update public.profiles
-          set role = 'owner'
-          where id = ${cashierId}::uuid
+          insert into public.sale_items (
+            sale_id, variant_id, product_name, size_name, colour_name,
+            qty, unit_price_pesewas, line_total_pesewas
+          ) values (
+            ${managerSaleId}::uuid,
+            ${model.targets.probeVariantId}::uuid,
+            'Not yours', 'L', 'Crisp White', 1, 1000, 1000
+          )
         `;
       }),
     ).rejects.toMatchObject({ code: "42501" });
   });
 
-  it("a manager cannot change a cashier role", async () => {
-    const cashierId = userForRole("cashier").id;
+  it("a manager cannot change a sale total and can void with a reason", async () => {
     await expect(
       asUser(userForRole("manager").id, async (tx) => {
         await tx`
-          update public.profiles
-          set role = 'manager'
-          where id = ${cashierId}::uuid
+          update public.sales
+          set total_pesewas = 1
+          where id = ${model.targets.updateSaleId}::uuid
+        `;
+      }),
+    ).rejects.toMatchObject({ code: "42501" });
+
+    const count = await asUser(userForRole("manager").id, async (tx) => {
+      const result = await tx`
+        update public.sales
+        set status = 'voided', void_reason = 'customer returned the shirt'
+        where id = ${model.targets.updateSaleId}::uuid
+      `;
+      return Number(result.count);
+    });
+    expect(count).toBe(1);
+  });
+
+  it("the owner cannot rewrite a sale total either", async () => {
+    await expect(
+      asUser(userForRole("owner").id, async (tx) => {
+        await tx`
+          update public.sales
+          set tendered_pesewas = 1
+          where id = ${model.targets.updateSaleId}::uuid
         `;
       }),
     ).rejects.toMatchObject({ code: "42501" });
   });
 
-  it("the owner can change a spare cashier role", async () => {
+  it("only the owner can change a credit balance", async () => {
+    await expect(
+      asUser(userForRole("cashier").id, async (tx) => {
+        await tx`
+          update public.customers
+          set credit_balance_pesewas = 1
+          where id = ${model.targets.updateCustomerId}::uuid
+        `;
+      }),
+    ).rejects.toMatchObject({ code: "42501" });
+    await expect(
+      asUser(userForRole("manager").id, async (tx) => {
+        await tx`
+          update public.customers
+          set credit_balance_pesewas = 1
+          where id = ${model.targets.updateCustomerId}::uuid
+        `;
+      }),
+    ).rejects.toMatchObject({ code: "42501" });
     const count = await asUser(userForRole("owner").id, async (tx) => {
       const result = await tx`
-        update public.profiles
-        set role = 'manager'
-        where id = ${model.targets.disposableProfileId}::uuid
+        update public.customers
+        set credit_balance_pesewas = 1
+        where id = ${model.targets.updateCustomerId}::uuid
       `;
       return Number(result.count);
     });

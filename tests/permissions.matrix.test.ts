@@ -1,35 +1,36 @@
 import { describe, expect, it } from "vitest";
 import {
   OPERATIONS,
-  PERMISSIONS,
+  PERMISSIONS_MATRIX,
   ROLES,
   TABLES,
-  accessFor,
+  decisionFor,
   type Role,
 } from "../shared/permissions.matrix.ts";
 import { USERS } from "../supabase/seed/catalog.ts";
 
 describe("permission matrix", () => {
   it("has one row for every role, table, and operation", () => {
-    expect(PERMISSIONS).toHaveLength(ROLES.length * TABLES.length * OPERATIONS.length);
-    const keys = PERMISSIONS.map((row) => `${row.role}:${row.table}:${row.operation}`);
+    expect(PERMISSIONS_MATRIX).toHaveLength(ROLES.length * TABLES.length * OPERATIONS.length);
+    const keys = PERMISSIONS_MATRIX.map((row) => `${row.role}:${row.table}:${row.operation}`);
     expect(new Set(keys).size).toBe(keys.length);
     for (const role of ROLES) {
       for (const table of TABLES) {
         for (const operation of OPERATIONS) {
-          const row = PERMISSIONS.find(
+          const row = PERMISSIONS_MATRIX.find(
             (candidate) =>
               candidate.role === role && candidate.table === table && candidate.operation === operation,
           );
-          expect(row?.access).toBe(accessFor(role, table, operation));
+          expect(row?.decision).toBe(decisionFor(role, table, operation));
         }
       }
     }
   });
 
-  it("only uses allow or deny", () => {
-    for (const row of PERMISSIONS) {
-      expect(["allow", "deny"]).toContain(row.access);
+  it("only uses allow or deny on decision", () => {
+    for (const row of PERMISSIONS_MATRIX) {
+      expect(["allow", "deny"]).toContain(row.decision);
+      expect(row).not.toHaveProperty("access");
     }
   });
 
@@ -42,7 +43,7 @@ describe("permission matrix", () => {
 
   it("does not let a cashier maintain the catalogue or void a sale", () => {
     const cashier = (table: (typeof TABLES)[number], operation: (typeof OPERATIONS)[number]) =>
-      accessFor("cashier" satisfies Role, table, operation);
+      decisionFor("cashier" satisfies Role, table, operation);
     expect(cashier("products", "insert")).toBe("deny");
     expect(cashier("products", "update")).toBe("deny");
     expect(cashier("products", "delete")).toBe("deny");

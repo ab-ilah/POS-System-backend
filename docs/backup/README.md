@@ -28,7 +28,7 @@ Commit the printed `age1...` line only. Keep `pos-backup-identity.txt`, and keep
 | `BACKUP_MIN_BYTES` | Optional. Dumps smaller than this fail. Default is 8192 bytes |
 | `PROD_DB_URL` | Session pooler URI, port 5432. Not the transaction pooler |
 
-`PROD_DB_URL` stays on the `production` environment only.
+`PROD_DB_URL` for this job lives on the `prod-ops` environment, which has no required reviewer. The same URL is also on `production` for migrations. It is never on `staging`.
 
 ## Layout in the bucket
 

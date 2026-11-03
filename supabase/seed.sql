@@ -33,7 +33,7 @@ insert into auth.users (
   'owner@example.com',
   extensions.crypt('local-dev-only', extensions.gen_salt('bf')),
   now(),
-  '{"provider":"email","providers":["email"]}'::jsonb,
+  '{"provider":"email","providers":["email"],"role":"owner"}'::jsonb,
   '{"full_name":"Ama Owusu Boateng"}'::jsonb,
   now(),
   now(),
@@ -47,11 +47,10 @@ insert into auth.users (
   ''
 );
 
-insert into public.profiles (id, full_name, role)
-values ('11111111-1111-4111-8111-111111111111'::uuid, 'Ama Owusu Boateng', 'owner'::public.app_role)
+insert into public.profiles (id, full_name)
+values ('11111111-1111-4111-8111-111111111111'::uuid, 'Ama Owusu Boateng')
 on conflict (id) do update
-set full_name = excluded.full_name,
-    role = excluded.role;
+set full_name = excluded.full_name;
 
 insert into auth.users (
   instance_id,
@@ -81,7 +80,7 @@ insert into auth.users (
   'manager@example.com',
   extensions.crypt('local-dev-only', extensions.gen_salt('bf')),
   now(),
-  '{"provider":"email","providers":["email"]}'::jsonb,
+  '{"provider":"email","providers":["email"],"role":"manager"}'::jsonb,
   '{"full_name":"Kwesi Mensah"}'::jsonb,
   now(),
   now(),
@@ -95,11 +94,10 @@ insert into auth.users (
   ''
 );
 
-insert into public.profiles (id, full_name, role)
-values ('22222222-2222-4222-8222-222222222222'::uuid, 'Kwesi Mensah', 'manager'::public.app_role)
+insert into public.profiles (id, full_name)
+values ('22222222-2222-4222-8222-222222222222'::uuid, 'Kwesi Mensah')
 on conflict (id) do update
-set full_name = excluded.full_name,
-    role = excluded.role;
+set full_name = excluded.full_name;
 
 insert into auth.users (
   instance_id,
@@ -129,7 +127,7 @@ insert into auth.users (
   'cashier@example.com',
   extensions.crypt('local-dev-only', extensions.gen_salt('bf')),
   now(),
-  '{"provider":"email","providers":["email"]}'::jsonb,
+  '{"provider":"email","providers":["email"],"role":"cashier"}'::jsonb,
   '{"full_name":"Akua Sarpong"}'::jsonb,
   now(),
   now(),
@@ -143,11 +141,10 @@ insert into auth.users (
   ''
 );
 
-insert into public.profiles (id, full_name, role)
-values ('33333333-3333-4333-8333-333333333333'::uuid, 'Akua Sarpong', 'cashier'::public.app_role)
+insert into public.profiles (id, full_name)
+values ('33333333-3333-4333-8333-333333333333'::uuid, 'Akua Sarpong')
 on conflict (id) do update
-set full_name = excluded.full_name,
-    role = excluded.role;
+set full_name = excluded.full_name;
 
 insert into auth.users (
   instance_id,
@@ -177,7 +174,7 @@ insert into auth.users (
   'spare.cashier@example.com',
   extensions.crypt('local-dev-only', extensions.gen_salt('bf')),
   now(),
-  '{"provider":"email","providers":["email"]}'::jsonb,
+  '{"provider":"email","providers":["email"],"role":"cashier"}'::jsonb,
   '{"full_name":"Yaw Darko"}'::jsonb,
   now(),
   now(),
@@ -191,11 +188,10 @@ insert into auth.users (
   ''
 );
 
-insert into public.profiles (id, full_name, role)
-values ('44444444-4444-4444-8444-444444444444'::uuid, 'Yaw Darko', 'cashier'::public.app_role)
+insert into public.profiles (id, full_name)
+values ('44444444-4444-4444-8444-444444444444'::uuid, 'Yaw Darko')
 on conflict (id) do update
-set full_name = excluded.full_name,
-    role = excluded.role;
+set full_name = excluded.full_name;
 
 insert into public.products (id, name, category, description, image_path)
 values

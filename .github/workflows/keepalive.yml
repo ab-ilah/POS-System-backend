@@ -1,13 +1,12 @@
 # Free Supabase projects pause after about a week without traffic.
-# Ping both projects twice a week so a shop closure, or one missed Monday,
-# does not pause them. PROD_DB_URL is read only inside the production environment.
+# Read a few catalogue tables every day. Production uses prod-ops, which has
+# no required reviewer, so the ping is not held behind the migration gate.
 
 name: Keepalive
 
 on:
   schedule:
-    - cron: "15 6 * * 1"
-    - cron: "15 6 * * 4"
+    - cron: "15 6 * * *"
   workflow_dispatch:
 
 permissions:
@@ -40,7 +39,7 @@ jobs:
   keepalive-production:
     name: keepalive-production
     runs-on: ubuntu-latest
-    environment: production
+    environment: prod-ops
     timeout-minutes: 10
     steps:
       - name: Checkout

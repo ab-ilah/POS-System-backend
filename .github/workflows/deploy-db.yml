@@ -54,10 +54,16 @@ jobs:
           STAGING_DB_URL: ${{ secrets.STAGING_DB_URL }}
         run: npx supabase db push --yes --remote="$STAGING_DB_URL"
 
+      - name: Disable hosted signup on staging
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: hnbvmxebzaocdttlteib
+        run: npm run auth:disable-signup
+
   deploy-production:
     name: deploy-production
-    # Manual only: workflow_dispatch with target production.
-    if: github.event_name == 'workflow_dispatch' && inputs.target == 'production'
+    # Manual only, and only from main. workflow_dispatch on any other ref does not run.
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.target == 'production'
     runs-on: ubuntu-latest
     environment: production
     timeout-minutes: 20
@@ -79,3 +85,9 @@ jobs:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           PROD_DB_URL: ${{ secrets.PROD_DB_URL }}
         run: npx supabase db push --yes --remote="$PROD_DB_URL"
+
+      - name: Disable hosted signup on production
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: vasbjwzykqoebbtvqnjx
+        run: npm run auth:disable-signup

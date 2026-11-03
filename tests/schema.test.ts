@@ -26,6 +26,14 @@ describe("schema", () => {
     expect(lowered).not.toMatch(/\b(card_number|pan|cvv)\b/);
   });
 
+  it("does not grant a role on signup and does not expose profile_role", () => {
+    expect(migration).not.toContain("default 'cashier'");
+    expect(migration).not.toContain("private.profile_role");
+    expect(migration).toContain("raw_app_meta_data ->> 'role'");
+    expect(migration).toContain("assign_staff_role");
+    expect(migration).toContain("revoke all on function private.staff_role(uuid) from public, anon, authenticated");
+  });
+
   it("revokes anon and keeps the private schema off the data API", () => {
     expect(lowered).toContain("revoke all on table");
     expect(lowered).toContain("from anon, public");

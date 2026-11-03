@@ -10,6 +10,7 @@ Backups are age-encrypted custom-format `pg_dump` files in the object-storage bu
 - Gabriel keeps that private file on a trusted machine.
 - Gabriel keeps a second copy offline, in a different place from the first (for example a sealed USB or a paper print).
 - The public file in git cannot decrypt a backup. If the private key is lost, the backups cannot be read. If it leaks, follow `docs/runbooks/key-rotation.md` within 1 hour.
+- Rotating the age recipient does not protect backups already encrypted to the old key. Anyone who has the old private key can still decrypt those objects until the bucket lifecycle deletes them (14 daily, 8 weekly). Keep the old private key until that window has passed, then destroy it. New dumps use only the recipient currently in `docs/backup/age.pub`.
 
 ## Download and decrypt
 
@@ -30,15 +31,27 @@ Pick one:
 - Local: `npx supabase start` in a checkout of the commit that matches the backup era.
 - Wiped staging: only after Gabriel has confirmed the URL is the staging session pooler. Never substitute `PROD_DB_URL` during a drill.
 
-A full Supabase dump includes platform schemas (`auth`, `storage`, and others). Restoring every schema onto a running stack collides with objects the platform owns. For a drill, restore the application schema:
+A full Supabase dump includes platform schemas (`auth`, `storage`, and others). Restoring every schema onto a running stack collides with objects the platform owns. Restore the `public` schema only.
+
+The same command works on an empty database and on one that already has these tables. `--clean` drops each object before recreating it. `--if-exists` makes that drop a no-op when the object is not there yet, which is the empty-database case. `--no-owner` and `--no-privileges` skip roles that exist only on the source project.
 
 ```bash
-pg_restore --no-owner --no-privileges --schema=public --clean --if-exists --exit-on-error \
-  --dbname "postgresql://postgres:postgres@127.0.0.1:54322/postgres" \
+pg_restore \
+  --no-owner \
+  --no-privileges \
+  --schema=public \
+  --clean \
+  --if-exists \
+  --exit-on-error \
+  --dbname "$TARGET_URL" \
   pos.dump
 ```
 
-The `pg_restore` client must be at least the server major (the backup job uses the server's own major). If `--schema=public` is not enough to boot the app, stop and restore into an empty local database created for the drill rather than forcing the dump over production.
+`$TARGET_URL` is either the local stack (`postgresql://postgres:postgres@127.0.0.1:54322/postgres` after `npx supabase start`) or the staging session pooler after Gabriel has confirmed the URL. Never point this at production during a drill.
+
+Use a fresh Supabase project when you do not want to wipe staging. Create it, run the migrations (`npx supabase db push`), then run the `pg_restore` command above. `--clean --if-exists` still applies: the migrated tables are dropped and replaced by the dump.
+
+The `pg_restore` client must be at least the server major (the backup job uses the server's own major).
 
 `npx supabase db reset` rebuilds from migrations and the local seed. It wipes whatever you just restored. Use it to prove the migrations and RLS suite, not as the step after a data restore.
 

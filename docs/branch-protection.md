@@ -40,12 +40,20 @@ Used by the staging database push and the staging keepalive.
 
 ### `production`
 
-Required reviewer: Gabriel. This is what gates the manual production database push.
+Required reviewer: Gabriel. This gates the manual production database push and the auth-config update that turns signup off. The job runs only from `main`.
 
 Secrets:
 
 - `SUPABASE_ACCESS_TOKEN`
-- `PROD_DB_URL` (this value must not also be stored on `staging`)
+- `PROD_DB_URL` (also stored on `prod-ops` for backups and the daily ping; never on `staging`)
+
+### `prod-ops`
+
+No required reviewer. This environment exists so the daily production keepalive and the nightly backup do not wait for an approval. It must not be used for migrations.
+
+Secrets, and nothing else:
+
+- `PROD_DB_URL`
 - `BACKUP_S3_ENDPOINT`
 - `BACKUP_S3_BUCKET`
 - `BACKUP_S3_REGION`
@@ -54,9 +62,7 @@ Secrets:
 - `BACKUP_S3_FORCE_PATH_STYLE` (optional; set the secret to `true` only if the provider needs path-style URLs)
 - `BACKUP_MIN_BYTES` (optional; the script defaults when this is empty)
 
-GitHub attaches required reviewers to the environment, not to a single workflow. The same reviewer rule also holds the nightly backup and the production keepalive until someone approves the run. A run that sits pending does not ping the database and does not upload a backup. Free projects pause after about a week without traffic, so a keepalive waiting on a click during a shop closure misses the point.
-
-Gabriel should keep the required reviewer on production, and approve the scheduled backup and keepalive runs (or adjust the environment rule if GitHub later supports a per-workflow exception). Do not copy `PROD_DB_URL` into an unprotected environment to dodge the review.
+Do not put `SUPABASE_ACCESS_TOKEN` here. Do not add Gabriel as a required reviewer. A reviewer on `prod-ops` would pause the Free project during a shop closure and would skip backups.
 
 ## Project refs
 

@@ -32,7 +32,7 @@ function renderUsers(model: SeedModel): string {
   ${sqlString(user.email)},
   extensions.crypt(${sqlString(LOCAL_SEED_PASSWORD)}, extensions.gen_salt('bf')),
   now(),
-  ${sqlJson({ provider: "email", providers: ["email"] })},
+  ${sqlJson({ provider: "email", providers: ["email"], role: user.role })},
   ${sqlJson({ full_name: user.fullName })},
   now(),
   now(),
@@ -45,11 +45,10 @@ function renderUsers(model: SeedModel): string {
   '',
   ''
 );`);
-    statements.push(`insert into public.profiles (id, full_name, role)
-values (${sqlUuid(user.id)}, ${sqlString(user.fullName)}, ${sqlString(user.role)}::public.app_role)
+    statements.push(`insert into public.profiles (id, full_name)
+values (${sqlUuid(user.id)}, ${sqlString(user.fullName)})
 on conflict (id) do update
-set full_name = excluded.full_name,
-    role = excluded.role;`);
+set full_name = excluded.full_name;`);
   }
   return statements.join("\n\n");
 }
