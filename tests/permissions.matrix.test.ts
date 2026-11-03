@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   OPERATIONS,
@@ -10,6 +11,22 @@ import {
 import { USERS } from "../supabase/seed/catalog.ts";
 
 describe("permission matrix", () => {
+  it("stays a self-contained module the frontend can import", () => {
+    const source = readFileSync("shared/permissions.matrix.ts", "utf8");
+    expect(source).not.toMatch(/^\s*import\s/m);
+    expect(source).not.toMatch(/\bfrom\s+["']/);
+    expect(source).toMatch(/^export const ROLES\b/m);
+    expect(source).toMatch(/^export const PERMISSIONS_MATRIX\b/m);
+    expect(source).toMatch(/^export type Role\b/m);
+    expect(source).toMatch(/^export type TableName\b/m);
+    expect(source).toMatch(/^export type Operation\b/m);
+    expect(source).toMatch(/^export type Decision\b/m);
+    expect(source).toMatch(/^export interface PermissionRow\b/m);
+    for (const row of PERMISSIONS_MATRIX) {
+      expect(Object.keys(row).sort()).toEqual(["decision", "operation", "role", "table"]);
+    }
+  });
+
   it("has one row for every role, table, and operation", () => {
     expect(PERMISSIONS_MATRIX).toHaveLength(ROLES.length * TABLES.length * OPERATIONS.length);
     const keys = PERMISSIONS_MATRIX.map((row) => `${row.role}:${row.table}:${row.operation}`);

@@ -1,10 +1,10 @@
 /**
  * Staff permission matrix for the clothing-store POS.
  *
- * This module is dependency-free on purpose. The React app in ab-ilah/POS-system-
- * should consume `PERMISSIONS_MATRIX` (each row has `decision`: 'allow' | 'deny').
- * Publish it as `@pos/permissions` and pin the version. A copied file must record
- * the backend git SHA. After this shape change, the frontend pin has to be re-synced.
+ * The React app imports this file directly (`shared/permissions.matrix.ts`).
+ * Keep it self-contained: no imports. The names it relies on are
+ * `PERMISSIONS_MATRIX` (rows with `decision`), `ROLES`, and the types
+ * `Role`, `TableName`, `Operation`, `Decision`, and `PermissionRow`.
  *
  * Adding a role: extend `ROLES`, add a block in `ACCESS`, add a seed user, and
  * add matching policies. The booleans are table-level. Row scope that a boolean
