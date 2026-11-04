@@ -1,0 +1,124 @@
+# Pull-request CI. This workflow must stay free of secrets.
+# It uses pull_request, never pull_request_target, so a fork PR cannot read
+# repository or environment secrets. The local Supabase keys printed by
+# `supabase start` are the public local demo keys, not the hosted projects.
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
+        with:
+          deno-version: v2.x
+
+      - name: Install
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Typecheck edge function
+        run: deno check supabase/functions/health/index.ts
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Check db push URL flag
+        run: |
+          help=$(npx supabase db push --help)
+          printf '%s\n' "$help" | grep -F -- '--remote[=<ref|branch|url>]'
+          printf '%s\n' "$help" | grep -F 'database URL'
+
+      - name: Secret scan
+        env:
+          SECRET_SCAN_BASE: origin/${{ github.base_ref || 'main' }}
+        run: |
+          base="${{ github.base_ref || 'main' }}"
+          git fetch origin "$base"
+          npm run secrets:scan
+
+  rls:
+    name: rls
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Start local Supabase
+        run: npx supabase start
+
+      - name: Check Postgres major matches config.toml
+        run: bash scripts/assert-postgres-major.sh
+
+      - name: Install age
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y age
+
+      - name: Reset database
+        run: npx supabase db reset
+
+      - name: PostgREST credit role check
+        env:
+          # Public local demo connection and API. Not a hosted credential.
+          API_URL: http://127.0.0.1:54321
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+        run: npx tsx scripts/check-credit-postgrest.ts
+
+      - name: pgTAP
+        run: npx supabase test db
+
+      - name: Dry-run db push against the local database
+        env:
+          LOCAL_DB_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+        run: npx supabase db push --dry-run --yes --remote="$LOCAL_DB_URL"
+
+      - name: RLS suite
+        env:
+          # Public local demo connection. Not a hosted credential.
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+        run: npm run test:rls
+
+      - name: Restore drill
+        run: bash scripts/restore-drill.sh

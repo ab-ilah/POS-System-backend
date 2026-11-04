@@ -1,0 +1,14 @@
+# PLACEHOLDER — NOT A REAL AGE PUBLIC KEY
+#
+# Gabriel: replace the PLACEHOLDER line below with the one age1... recipient
+# from a key generated on a trusted machine. Do not commit the private identity.
+#
+#   age-keygen -o pos-backup-identity.txt
+#   age-keygen -y pos-backup-identity.txt
+#
+# Keep pos-backup-identity.txt off this repo. Keep a second copy offline
+# (a sealed USB or paper print stored somewhere else). The nightly backup
+# fails until this file contains a real age1 recipient and no PLACEHOLDER line.
+# Instructions: docs/backup/README.md
+
+PLACEHOLDER_NOT_A_REAL_AGE_PUBLIC_KEY

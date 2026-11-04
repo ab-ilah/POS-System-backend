@@ -1,0 +1,62 @@
+# Free Supabase projects pause after about a week without traffic.
+# Read a few catalogue tables every day. Production uses prod-ops, which has
+# no required reviewer, so the ping is not held behind the migration gate.
+
+name: Keepalive
+
+on:
+  schedule:
+    - cron: "15 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  keepalive-staging:
+    name: keepalive-staging
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: staging
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Ping staging
+        env:
+          DATABASE_URL: ${{ secrets.STAGING_DB_URL }}
+        run: npm run keepalive
+
+  keepalive-production:
+    name: keepalive-production
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: prod-ops
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Ping production
+        env:
+          DATABASE_URL: ${{ secrets.PROD_DB_URL }}
+        run: npm run keepalive
