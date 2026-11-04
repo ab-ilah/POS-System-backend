@@ -100,13 +100,11 @@ jobs:
         run: npx supabase db reset
 
       - name: PostgREST credit role check
-        run: |
-          eval "$(npx supabase status -o env)"
-          if [ -z "${API_URL:-}" ] && [ -n "${SUPABASE_URL:-}" ]; then
-            API_URL="$SUPABASE_URL"
-          fi
-          export API_URL
-          npx tsx scripts/check-credit-postgrest.ts
+        env:
+          # Public local demo connection and API. Not a hosted credential.
+          API_URL: http://127.0.0.1:54321
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+        run: npx tsx scripts/check-credit-postgrest.ts
 
       - name: pgTAP
         run: npx supabase test db
