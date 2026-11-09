@@ -95,7 +95,7 @@ for insert
 to authenticated
 with check ((select private.current_app_role()) in ('owner', 'manager', 'cashier'));
 
--- Cashiers cannot update variant rows directly. Stock leaves the shelf inside commit_sale.
+-- Stock decrement callable only from commit_sale (EXECUTE granted to postgres, not clients).
 create or replace function private.stock_qty_apply_for_commit(
   p_variant_id uuid,
   p_delta integer
@@ -107,23 +107,8 @@ set search_path = ''
 as $$
 declare
   locked_qty integer;
+  rows_updated integer;
 begin
-  if coalesce(pg_catalog.current_setting('private.commit_sale_active', true), '') <> '1' then
-    raise exception 'stock adjustment is only allowed during commit_sale'
-      using errcode = '42501';
-  end if;
-  if pg_catalog.current_setting('role', true) is distinct from 'authenticated'
-     or coalesce((select auth.jwt() ->> 'role'), '') is distinct from 'authenticated' then
-    raise exception 'only staff can commit a sale'
-      using errcode = '42501';
-  end if;
-  if private.app_role_of((select auth.uid())) is null
-     or private.app_role_of((select auth.uid())) not in (
-       'owner'::public.app_role, 'manager'::public.app_role, 'cashier'::public.app_role
-     ) then
-    raise exception 'only staff can commit a sale'
-      using errcode = '42501';
-  end if;
   select v.stock_qty
   into locked_qty
   from public.product_variants as v
@@ -140,11 +125,16 @@ begin
   update public.product_variants as v
   set stock_qty = v.stock_qty + p_delta
   where v.id = p_variant_id;
+  get diagnostics rows_updated = row_count;
+  if rows_updated <> 1 then
+    raise exception 'stock row was not updated'
+      using errcode = 'P0006';
+  end if;
 end;
 $$;
 
 revoke all on function private.stock_qty_apply_for_commit(uuid, integer) from public, anon, authenticated, service_role;
-grant execute on function private.stock_qty_apply_for_commit(uuid, integer) to authenticated;
+grant execute on function private.stock_qty_apply_for_commit(uuid, integer) to postgres;
 
 create or replace function public.commit_sale(
   p_idempotency_key uuid,
@@ -153,12 +143,12 @@ create or replace function public.commit_sale(
 )
 returns jsonb
 language plpgsql
-security invoker
+security definer
 set search_path = ''
 as $$
 declare
   caller uuid;
-  role public.app_role;
+  staff_role public.app_role;
   existing public.sales%rowtype;
   line jsonb;
   line_id uuid;
@@ -176,19 +166,27 @@ declare
   colour_name text;
   receipt text;
   line_ids uuid[] := '{}';
+  rows_affected integer;
   i integer;
 begin
-  if not private.session_is_authenticated_staff() then
+  if (select auth.role()) is distinct from 'authenticated' then
     raise exception 'only staff can commit a sale'
       using errcode = '42501';
   end if;
-  role := private.current_app_role();
-  if role is null or role not in ('owner'::public.app_role, 'manager'::public.app_role, 'cashier'::public.app_role) then
+  if coalesce((select auth.jwt() ->> 'role'), '') is distinct from 'authenticated' then
     raise exception 'only staff can commit a sale'
       using errcode = '42501';
   end if;
   caller := (select auth.uid());
   if caller is null then
+    raise exception 'only staff can commit a sale'
+      using errcode = '42501';
+  end if;
+  staff_role := private.app_role_of(caller);
+  if staff_role is null
+     or staff_role not in (
+       'owner'::public.app_role, 'manager'::public.app_role, 'cashier'::public.app_role
+     ) then
     raise exception 'only staff can commit a sale'
       using errcode = '42501';
   end if;
@@ -265,6 +263,7 @@ begin
     select v.price_pesewas, v.stock_qty
     into shelf_price, stock_qty
     from public.product_variants as v
+    inner join public.products as p on p.id = v.product_id and p.active = true
     where v.id = variant_ids[i]
     for update of v;
     if not found then
@@ -280,6 +279,7 @@ begin
     select v.price_pesewas, v.stock_qty
     into shelf_price, stock_qty
     from public.product_variants as v
+    inner join public.products as p on p.id = v.product_id and p.active = true
     where v.id = variant_id;
     if not found then
       raise exception 'no such variant'
@@ -294,8 +294,6 @@ begin
         using errcode = 'PSTCK';
     end if;
   end loop;
-
-  perform pg_catalog.set_config('private.commit_sale_active', '1', true);
 
   receipt := upper('C-' || substr(replace(p_idempotency_key::text, '-', ''), 1, 12));
 
@@ -382,9 +380,13 @@ begin
     update public.sales as s
     set status = 'completed'
     where s.id = p_idempotency_key
-      and s.status = 'open';
-
-    perform pg_catalog.set_config('private.commit_sale_active', '0', true);
+      and s.status = 'open'
+      and s.cashier_id = caller;
+    get diagnostics rows_affected = row_count;
+    if rows_affected <> 1 then
+      raise exception 'sale was not completed'
+        using errcode = 'P0006';
+    end if;
 
     return pg_catalog.jsonb_build_object(
       'sale_id', p_idempotency_key,
@@ -404,14 +406,13 @@ begin
       end if;
       raise;
     when others then
-      perform pg_catalog.set_config('private.commit_sale_active', '0', true);
       raise;
   end;
 end;
 $$;
 
 comment on function public.commit_sale(uuid, uuid, jsonb) is
-  'One-shot sale: open header, sale_items, stock moves, then complete. Idempotent on p_idempotency_key (client sale id).';
+  'Trusted one-shot sale: open header, sale_items, stock moves, then complete. Idempotent on p_idempotency_key (client sale id).';
 
 revoke all on function public.commit_sale(uuid, uuid, jsonb) from public, anon, service_role;
 grant execute on function public.commit_sale(uuid, uuid, jsonb) to authenticated;

@@ -11,7 +11,7 @@ create function public.commit_sale(
   p_lines jsonb
 ) returns jsonb
 language plpgsql
-security invoker
+security definer
 set search_path = ''
 ```
 
@@ -33,7 +33,7 @@ On idempotency replay, `replayed` is `true` and the function performs no writes.
 
 ## Behaviour
 
-1. **Staff only** — Authenticated JWT with `role = authenticated` and an `owner`, `manager`, or `cashier` `app_metadata` role. `anon` and `service_role` are rejected (`42501`).
+1. **Staff only** — `auth.role()` and JWT `role` must be `authenticated`, with `app_metadata.role` in `owner` / `manager` / `cashier`. `anon` and `service_role` are rejected (`42501`). The function runs as **SECURITY DEFINER** and enforces the same rules RLS would (store exists, active catalog variant, `cashier_id = auth.uid()`).
 2. **Idempotency** — Transaction-scoped advisory lock on the key. An existing `sales` row with that id returns the replay payload with no extra lines, stock moves, or stock changes.
 3. **One transaction** — Insert `open` sale, `sale_items`, `stock_movements`, decrement `product_variants.stock_qty` (via `private.stock_qty_apply_for_commit`), then set `completed`. Any failure rolls back everything.
 4. **Stock** — Variants are locked `FOR UPDATE` in a deterministic `variant_id` order. Sales that would drive stock below zero raise `PSTCK` / `insufficient stock`.

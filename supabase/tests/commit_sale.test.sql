@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set search_path = extensions, public, pg_temp;
 
-select plan(13);
+select plan(20);
 
 create temporary table commit_fixture as
 select
@@ -69,6 +69,31 @@ select lives_ok(
   'happy path commits a sale'
 );
 
+select is(
+  (select status from public.sales where id = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'::uuid),
+  'completed',
+  'cashier commit leaves the sale completed'
+);
+
+select throws_ok(
+  $$
+    insert into public.sale_items (
+      sale_id, variant_id, product_name, size_name, colour_name,
+      qty, unit_price_pesewas, line_total_pesewas
+    )
+  values (
+      'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'::uuid,
+      (select stocked_variant_id from commit_fixture),
+      'Late', 'M', 'Black', 1,
+      (select shelf_price from commit_fixture),
+      (select shelf_price from commit_fixture)
+    )
+  $$,
+  '42501',
+  'cannot change lines on a finished sale',
+  'a completed sale rejects a new sale_item'
+);
+
 select results_eq(
   $$
     select (public.commit_sale(
@@ -86,6 +111,12 @@ select results_eq(
   $$,
   $$ values (true) $$,
   'replay returns replayed true'
+);
+
+select is(
+  (select status from public.sales where id = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'::uuid),
+  'completed',
+  'replay returns an already completed sale'
 );
 
 select is(
@@ -168,6 +199,51 @@ select throws_ok(
   'P0003',
   'unit price does not match shelf price',
   'price mismatch is rejected'
+);
+
+select throws_ok(
+  $$
+    select public.commit_sale(
+      '1b1b1b1b-1b1b-41b1-81b1-1b1b1b1b1b1b'::uuid,
+      '00000000-0000-4000-8000-000000009999'::uuid,
+      jsonb_build_array(
+        jsonb_build_object(
+          'id', '1c1c1c1c-1c1c-41c1-81c1-1c1c1c1c1c1c',
+          'variant_id', (select stocked_variant_id from commit_fixture),
+          'quantity', 1,
+          'unit_price_pesewas', (select shelf_price from commit_fixture)
+        )
+      )
+    )
+  $$,
+  'P0002',
+  'no such store',
+  'wrong store id is rejected'
+);
+
+select throws_ok(
+  $$
+    update public.product_variants
+    set stock_qty = stock_qty - 1
+    where id = (select stocked_variant_id from commit_fixture)
+  $$,
+  '42501',
+  NULL,
+  'cashier cannot update stock_qty directly'
+);
+
+select set_config('private.commit_sale_active', '1', true);
+
+select throws_ok(
+  $$
+    select private.stock_qty_apply_for_commit(
+      (select stocked_variant_id from commit_fixture),
+      -1
+    )
+  $$,
+  '42501',
+  NULL,
+  'direct call to stock helper is denied even with the old GUC set'
 );
 
 select throws_ok(
