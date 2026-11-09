@@ -342,9 +342,14 @@ values
   ('30000000-0000-4000-8000-000000000007'::uuid, 'Abena Poku', '0244001107', 8000),
   ('30000000-0000-4000-8000-000000000008'::uuid, 'Nana Yaa Asantewaa', '0244001108', 120000);
 
+insert into public.stores (id, name)
+values ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'::uuid, 'Main shop')
+on conflict (id) do nothing;
+
 insert into public.sales (
   id,
   receipt_no,
+  store_id,
   customer_id,
   cashier_id,
   status,
@@ -354,19 +359,19 @@ insert into public.sales (
   change_pesewas,
   credit_applied_pesewas
 ) values
-  ('40000000-0000-4000-8000-000000000001'::uuid, 'POS-0001', null, '33333333-3333-4333-8333-333333333333'::uuid, 'open', 33000, 33000, 35000, 2000, 0),
-  ('40000000-0000-4000-8000-000000000002'::uuid, 'POS-0002', '30000000-0000-4000-8000-000000000003'::uuid, '33333333-3333-4333-8333-333333333333'::uuid, 'open', 45000, 45000, 20000, 0, 25000),
-  ('40000000-0000-4000-8000-000000000003'::uuid, 'POS-0003', '30000000-0000-4000-8000-000000000002'::uuid, '22222222-2222-4222-8222-222222222222'::uuid, 'open', 97000, 97000, 100000, 3000, 0),
-  ('40000000-0000-4000-8000-000000000004'::uuid, 'POS-0004', '30000000-0000-4000-8000-000000000005'::uuid, '33333333-3333-4333-8333-333333333333'::uuid, 'open', 120000, 120000, 120000, 0, 0);
+  ('40000000-0000-4000-8000-000000000001'::uuid, 'POS-0001', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'::uuid, null, '33333333-3333-4333-8333-333333333333'::uuid, 'open', 33000, 33000, 35000, 2000, 0),
+  ('40000000-0000-4000-8000-000000000002'::uuid, 'POS-0002', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'::uuid, '30000000-0000-4000-8000-000000000003'::uuid, '33333333-3333-4333-8333-333333333333'::uuid, 'open', 45000, 45000, 20000, 0, 25000),
+  ('40000000-0000-4000-8000-000000000003'::uuid, 'POS-0003', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'::uuid, '30000000-0000-4000-8000-000000000002'::uuid, '22222222-2222-4222-8222-222222222222'::uuid, 'open', 97000, 97000, 100000, 3000, 0),
+  ('40000000-0000-4000-8000-000000000004'::uuid, 'POS-0004', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'::uuid, '30000000-0000-4000-8000-000000000005'::uuid, '33333333-3333-4333-8333-333333333333'::uuid, 'open', 120000, 120000, 120000, 0, 0);
 
-insert into public.sale_items (
+insert into public.sale_lines (
   id,
   sale_id,
   variant_id,
   product_name,
   size_name,
   colour_name,
-  qty,
+  quantity,
   unit_price_pesewas,
   line_total_pesewas
 ) values

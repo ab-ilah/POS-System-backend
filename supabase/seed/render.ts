@@ -97,10 +97,11 @@ ${rows};`;
 }
 
 function renderSales(model: SeedModel): string {
+  const defaultStoreId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
   const saleRows = model.sales
     .map(
       (sale) =>
-        `  (${sqlUuid(sale.id)}, ${sqlString(sale.receiptNo)}, ${sale.customerId === null ? "null" : sqlUuid(sale.customerId)}, ${sqlUuid(sale.cashierId)}, 'open', ${sqlInt(sale.subtotalPesewas, sale.receiptNo)}, ${sqlInt(sale.totalPesewas, sale.receiptNo)}, ${sqlInt(sale.tenderedPesewas, sale.receiptNo)}, ${sqlInt(sale.changePesewas, sale.receiptNo)}, ${sqlInt(sale.creditAppliedPesewas, sale.receiptNo)})`,
+        `  (${sqlUuid(sale.id)}, ${sqlString(sale.receiptNo)}, ${sqlUuid(defaultStoreId)}, ${sale.customerId === null ? "null" : sqlUuid(sale.customerId)}, ${sqlUuid(sale.cashierId)}, 'open', ${sqlInt(sale.subtotalPesewas, sale.receiptNo)}, ${sqlInt(sale.totalPesewas, sale.receiptNo)}, ${sqlInt(sale.tenderedPesewas, sale.receiptNo)}, ${sqlInt(sale.changePesewas, sale.receiptNo)}, ${sqlInt(sale.creditAppliedPesewas, sale.receiptNo)})`,
     )
     .join(",\n");
   const itemRows = model.sales
@@ -110,9 +111,14 @@ function renderSales(model: SeedModel): string {
         `  (${sqlUuid(item.id)}, ${sqlUuid(item.saleId)}, ${sqlUuid(item.variantId)}, ${sqlString(item.productName)}, ${sqlString(item.sizeName)}, ${sqlString(item.colourName)}, ${sqlInt(item.qty, item.id)}, ${sqlInt(item.unitPricePesewas, item.id)}, ${sqlInt(item.lineTotalPesewas, item.id)})`,
     )
     .join(",\n");
-  return `insert into public.sales (
+  return `insert into public.stores (id, name)
+values (${sqlUuid(defaultStoreId)}, 'Main shop')
+on conflict (id) do nothing;
+
+insert into public.sales (
   id,
   receipt_no,
+  store_id,
   customer_id,
   cashier_id,
   status,
@@ -124,14 +130,14 @@ function renderSales(model: SeedModel): string {
 ) values
 ${saleRows};
 
-insert into public.sale_items (
+insert into public.sale_lines (
   id,
   sale_id,
   variant_id,
   product_name,
   size_name,
   colour_name,
-  qty,
+  quantity,
   unit_price_pesewas,
   line_total_pesewas
 ) values
