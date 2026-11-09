@@ -41,7 +41,6 @@ function verdict(count: number): Decision {
 }
 
 const model = buildSeed();
-const DEFAULT_STORE_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 let sql: ReturnType<typeof postgres>;
 
 beforeAll(() => {
@@ -92,19 +91,11 @@ async function selectCount(tx: Tx, table: TableName): Promise<number> {
     const rows = await tx<{ n: number }[]>`select count(*)::int as n from public.customers`;
     return Number(rows[0]?.n ?? 0);
   }
-  if (table === "stores") {
-    const rows = await tx<{ n: number }[]>`select count(*)::int as n from public.stores`;
-    return Number(rows[0]?.n ?? 0);
-  }
   if (table === "sales") {
     const rows = await tx<{ n: number }[]>`select count(*)::int as n from public.sales`;
     return Number(rows[0]?.n ?? 0);
   }
-  if (table === "stock_movements") {
-    await tx`select 1 from public.stock_movements limit 1`;
-    return 1;
-  }
-  const rows = await tx<{ n: number }[]>`select count(*)::int as n from public.sale_lines`;
+  const rows = await tx<{ n: number }[]>`select count(*)::int as n from public.sale_items`;
   return Number(rows[0]?.n ?? 0);
 }
 
@@ -146,18 +137,10 @@ async function insertProbe(tx: Tx, table: TableName): Promise<void> {
     `;
     return;
   }
-  if (table === "stores") {
-    await tx`
-      insert into public.stores (name)
-      values ('RLS Probe Store')
-    `;
-    return;
-  }
   if (table === "sales") {
     await tx`
       insert into public.sales (
         receipt_no,
-        store_id,
         customer_id,
         cashier_id,
         status,
@@ -168,7 +151,6 @@ async function insertProbe(tx: Tx, table: TableName): Promise<void> {
         credit_applied_pesewas
       ) values (
         'RLS-' || replace(gen_random_uuid()::text, '-', ''),
-        ${DEFAULT_STORE_ID}::uuid,
         null,
         (select auth.uid()),
         'completed',
@@ -181,26 +163,9 @@ async function insertProbe(tx: Tx, table: TableName): Promise<void> {
     `;
     return;
   }
-  if (table === "stock_movements") {
-    await tx`
-      insert into public.stock_movements (
-        sale_id,
-        sale_line_id,
-        variant_id,
-        qty_delta
-      ) values (
-        ${model.targets.updateSaleId}::uuid,
-        ${model.targets.updateSaleItemId}::uuid,
-        ${model.targets.probeVariantId}::uuid,
-        -1
-      )
-    `;
-    return;
-  }
   const created = await tx<{ id: string }[]>`
     insert into public.sales (
       receipt_no,
-      store_id,
       customer_id,
       cashier_id,
       status,
@@ -211,7 +176,6 @@ async function insertProbe(tx: Tx, table: TableName): Promise<void> {
       credit_applied_pesewas
     ) values (
       'RLS-LINE-' || replace(gen_random_uuid()::text, '-', ''),
-      ${DEFAULT_STORE_ID}::uuid,
       null,
       (select auth.uid()),
       'open',
@@ -228,13 +192,13 @@ async function insertProbe(tx: Tx, table: TableName): Promise<void> {
     throw new Error("own sale was not created");
   }
   await tx`
-    insert into public.sale_lines (
+    insert into public.sale_items (
       sale_id,
       variant_id,
       product_name,
       size_name,
       colour_name,
-      quantity,
+      qty,
       unit_price_pesewas,
       line_total_pesewas
     ) values (
@@ -285,14 +249,6 @@ async function updateProbe(tx: Tx, role: Role, table: TableName): Promise<number
     `;
     return Number(result.count);
   }
-  if (table === "stores") {
-    const result = await tx`
-      update public.stores
-      set name = name
-      where id = ${DEFAULT_STORE_ID}::uuid
-    `;
-    return Number(result.count);
-  }
   if (table === "sales") {
     const result = await tx`
       update public.sales
@@ -301,17 +257,9 @@ async function updateProbe(tx: Tx, role: Role, table: TableName): Promise<number
     `;
     return Number(result.count);
   }
-  if (table === "stock_movements") {
-    const result = await tx`
-      update public.stock_movements
-      set qty_delta = qty_delta
-      where sale_line_id = ${model.targets.updateSaleItemId}::uuid
-    `;
-    return Number(result.count);
-  }
   const result = await tx`
-    update public.sale_lines
-    set quantity = quantity
+    update public.sale_items
+    set qty = qty
     where id = ${model.targets.updateSaleItemId}::uuid
   `;
   return Number(result.count);
@@ -346,15 +294,6 @@ async function deleteProbe(tx: Tx, table: TableName): Promise<number> {
     `;
     return Number(result.count);
   }
-  if (table === "stores") {
-    const result = await tx`
-      with ins as (
-        insert into public.stores (name) values ('RLS Delete Probe') returning id
-      )
-      delete from public.stores where id in (select id from ins)
-    `;
-    return Number(result.count);
-  }
   if (table === "sales") {
     const result = await tx`
       delete from public.sales
@@ -362,15 +301,8 @@ async function deleteProbe(tx: Tx, table: TableName): Promise<number> {
     `;
     return Number(result.count);
   }
-  if (table === "stock_movements") {
-    const result = await tx`
-      delete from public.stock_movements
-      where sale_line_id = ${model.targets.updateSaleItemId}::uuid
-    `;
-    return Number(result.count);
-  }
   const result = await tx`
-    delete from public.sale_lines
+    delete from public.sale_items
     where id = ${model.targets.updateSaleItemId}::uuid
   `;
   return Number(result.count);
@@ -584,9 +516,9 @@ describe("RLS matches the permission matrix", () => {
     await expect(
       asUser(userForRole("cashier").id, async (tx) => {
         await tx`
-          insert into public.sale_lines (
+          insert into public.sale_items (
             sale_id, variant_id, product_name, size_name, colour_name,
-            quantity, unit_price_pesewas, line_total_pesewas
+            qty, unit_price_pesewas, line_total_pesewas
           ) values (
             ${ownSaleId}::uuid,
             ${model.targets.probeVariantId}::uuid,
@@ -605,9 +537,9 @@ describe("RLS matches the permission matrix", () => {
     await expect(
       asUser(userForRole("cashier").id, async (tx) => {
         await tx`
-          insert into public.sale_lines (
+          insert into public.sale_items (
             sale_id, variant_id, product_name, size_name, colour_name,
-            quantity, unit_price_pesewas, line_total_pesewas
+            qty, unit_price_pesewas, line_total_pesewas
           ) values (
             ${managerSaleId}::uuid,
             ${model.targets.probeVariantId}::uuid,
