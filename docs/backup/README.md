@@ -15,7 +15,7 @@ age-keygen -y pos-backup-identity.txt
 
 Commit the printed `age1...` line only. Keep `pos-backup-identity.txt`, and keep a second offline copy. See `docs/runbooks/restore.md`.
 
-- The object-storage secrets on the `prod-ops` environment, not on `production`. `production` is the reviewer-gated migration environment and must not hold the backup credentials. The provider is not chosen yet. The same variables work for Cloudflare R2 or Backblaze B2:
+- The object-storage secrets on the `prod-ops` environment, not on `production`. `production` is the reviewer-gated migration environment and must not hold the backup credentials. **Gabriel chose Backblaze B2** (S3-compatible API, **path-style** addressing). Set `BACKUP_S3_FORCE_PATH_STYLE=true` on `prod-ops`. Example endpoint shape: `https://s3.<region>.backblazeb2.com`. Secrets are still added later by Gabriel on `prod-ops` — this repository does not wire them. The same variable names work if you ever pointed at another S3-compatible provider:
 
 | Secret | Meaning |
 | --- | --- |

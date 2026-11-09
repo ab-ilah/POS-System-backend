@@ -152,7 +152,7 @@ echo "seeded counts: $expected"
 docker cp "$workdir/pos.dump" "$container:/tmp/pos-restore.dump"
 
 echo "data-only restore onto the migrated schema"
-psql_admin -c "truncate table public.sale_items, public.sales, public.customers, public.product_variants, public.products, public.profiles;"
+psql_admin -c "truncate table public.stock_movements, public.sale_items, public.sales, public.stores, public.customers, public.product_variants, public.products, public.profiles;"
 docker exec "$container" pg_restore -U supabase_admin -d postgres \
   --data-only \
   --schema=public \
@@ -169,8 +169,10 @@ echo "full restore onto an empty application schema"
 psql_admin <<'SQL'
 drop schema if exists private cascade;
 drop table if exists
+  public.stock_movements,
   public.sale_items,
   public.sales,
+  public.stores,
   public.customers,
   public.product_variants,
   public.products,

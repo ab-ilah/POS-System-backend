@@ -18,6 +18,7 @@ select
   ) as finished_sale_id;
 
 insert into public.sales (
+  store_id,
   receipt_no,
   cashier_id,
   status,
@@ -30,6 +31,7 @@ insert into public.sales (
   credit_applied_pesewas
 )
 select
+  'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'::uuid,
   'PGTAP-VOID-' || gen_random_uuid()::text,
   cashier_id,
   'voided',
@@ -87,6 +89,7 @@ select throws_ok(
 );
 
 insert into public.sales (
+  store_id,
   id,
   receipt_no,
   cashier_id,
@@ -98,7 +101,8 @@ insert into public.sales (
   credit_applied_pesewas
 )
 select
-  '88888888-8888-4888-8888-888888888888',
+  'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'::uuid,
+  '88888888-8888-4888-8888-888888888888'::uuid,
   'PGTAP-OPEN-1',
   cashier_id,
   'open',

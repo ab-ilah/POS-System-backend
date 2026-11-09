@@ -10,11 +10,13 @@ select set_config('test.manager', (select id::text from auth.users where email =
 select set_config('test.cashier', (select id::text from auth.users where email = 'cashier@example.com'), true);
 
 insert into public.sales (
+  store_id,
   id, receipt_no, cashier_id, status,
   subtotal_pesewas, total_pesewas, tendered_pesewas, change_pesewas, credit_applied_pesewas
 )
 select
-  '66666666-6666-4666-8666-666666666661',
+  'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'::uuid,
+  '66666666-6666-4666-8666-666666666661'::uuid,
   'PGTAP-ROLE-OPEN',
   id,
   'open',

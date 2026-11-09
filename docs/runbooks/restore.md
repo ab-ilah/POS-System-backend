@@ -150,7 +150,7 @@ Compare that list with `supabase/migrations` at the commit you believe the backu
 select relname, relrowsecurity
 from pg_class
 where relnamespace = 'public'::regnamespace
-  and relname in ('profiles', 'products', 'product_variants', 'customers', 'sales', 'sale_items');
+  and relname in ('profiles', 'products', 'product_variants', 'customers', 'stores', 'sales', 'sale_items', 'stock_movements');
 ```
 
 Each `relrowsecurity` value must be true.

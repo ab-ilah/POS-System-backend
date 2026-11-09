@@ -6,10 +6,12 @@ set search_path = extensions, public, pg_temp;
 select plan(8);
 
 insert into public.sales (
+  store_id,
   id, receipt_no, cashier_id, status,
   subtotal_pesewas, total_pesewas, tendered_pesewas, change_pesewas, credit_applied_pesewas
 )
 select
+  'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'::uuid,
   id, receipt_no, cashier_id, 'open', 1000, 1000, 1000, 0, 0
 from (
   values
