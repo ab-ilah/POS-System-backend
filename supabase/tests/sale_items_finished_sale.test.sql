@@ -18,6 +18,7 @@ select
   ) as finished_sale_id;
 
 insert into public.sales (
+  store_id,
   receipt_no,
   cashier_id,
   status,
@@ -30,6 +31,7 @@ insert into public.sales (
   credit_applied_pesewas
 )
 select
+  'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'::uuid,
   'PGTAP-VOID-' || gen_random_uuid()::text,
   cashier_id,
   'voided',
@@ -44,9 +46,9 @@ from pgtap_ids;
 
 select throws_ok(
   $$
-    insert into public.sale_items (
+    insert into public.sale_lines (
       sale_id, variant_id, product_name, size_name, colour_name,
-      qty, unit_price_pesewas, line_total_pesewas
+      quantity, unit_price_pesewas, line_total_pesewas
     )
     select finished_sale_id, variant_id, 'Probe', 'M', 'Black', 1, 1000, 1000
     from pgtap_ids
@@ -58,7 +60,7 @@ select throws_ok(
 
 select throws_ok(
   $$
-    update public.sale_items as item
+    update public.sale_lines as item
     set product_name = item.product_name
     from public.sales as sale
     where sale.id = item.sale_id
@@ -71,9 +73,9 @@ select throws_ok(
 
 select throws_ok(
   $$
-    insert into public.sale_items (
+    insert into public.sale_lines (
       sale_id, variant_id, product_name, size_name, colour_name,
-      qty, unit_price_pesewas, line_total_pesewas
+      quantity, unit_price_pesewas, line_total_pesewas
     )
     select sale.id, ids.variant_id, 'Probe', 'M', 'Black', 1, 1000, 1000
     from public.sales as sale
@@ -87,6 +89,7 @@ select throws_ok(
 );
 
 insert into public.sales (
+  store_id,
   id,
   receipt_no,
   cashier_id,
@@ -98,7 +101,8 @@ insert into public.sales (
   credit_applied_pesewas
 )
 select
-  '88888888-8888-4888-8888-888888888888',
+  'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'::uuid,
+  '88888888-8888-4888-8888-888888888888'::uuid,
   'PGTAP-OPEN-1',
   cashier_id,
   'open',
@@ -125,9 +129,9 @@ set local role authenticated;
 
 select throws_ok(
   $$
-    insert into public.sale_items (
+    insert into public.sale_lines (
       sale_id, variant_id, product_name, size_name, colour_name,
-      qty, unit_price_pesewas, line_total_pesewas
+      quantity, unit_price_pesewas, line_total_pesewas
     )
     select finished_sale_id, variant_id, 'Probe', 'M', 'Black', 1, 1000, 1000
     from pgtap_ids
@@ -139,13 +143,13 @@ select throws_ok(
 
 select lives_ok(
   $$
-    insert into public.sale_items (
+    insert into public.sale_lines (
       sale_id,
       variant_id,
       product_name,
       size_name,
       colour_name,
-      qty,
+      quantity,
       unit_price_pesewas,
       line_total_pesewas
     )

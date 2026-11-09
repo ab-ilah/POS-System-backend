@@ -67,6 +67,6 @@ describe("permission matrix", () => {
     expect(cashier("sales", "insert")).toBe("allow");
     expect(cashier("sales", "update")).toBe("deny");
     expect(cashier("sales", "delete")).toBe("deny");
-    expect(cashier("sale_items", "update")).toBe("deny");
+    expect(cashier("sale_lines", "update")).toBe("deny");
   });
 });

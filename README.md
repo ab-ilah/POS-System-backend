@@ -85,6 +85,7 @@ Publish this file as a dependency-free package, recommended name `@pos/permissio
 | `tests/` | Unit tests and the RLS suite |
 | `scripts/` | Secret scan, keepalive, backup |
 | `docs/` | Protection, rotation, restore, backups, ADR |
+| `docs/api/commit-sale.md` | `commit_sale` RPC contract |
 
 ## Secrets Gabriel adds
 
@@ -123,7 +124,7 @@ No required reviewer. Daily production keepalive and the nightly backup. Do not 
 | `BACKUP_S3_FORCE_PATH_STYLE` | Optional. `true` when the provider wants path-style URLs. |
 | `BACKUP_MIN_BYTES` | Optional. Refuse dumps smaller than this. Default 8192. |
 
-The backup host is not chosen yet. The same variables work for Cloudflare R2 or Backblaze B2. Retention (14 daily, 8 weekly) is a bucket lifecycle rule, documented in `docs/backup/README.md`. The age public key in `docs/backup/age.pub` is a placeholder until Gabriel replaces it. Backups fail on purpose until then.
+Backups target **Backblaze B2** (S3-compatible, path-style). Set `BACKUP_S3_FORCE_PATH_STYLE=true` on `prod-ops` when Gabriel adds secrets there — not in this repo. Retention is **14 daily + 8 weekly** via bucket lifecycle rules (`docs/backup/README.md`). The age public key in `docs/backup/age.pub` is a placeholder until Gabriel replaces it. Backups fail on purpose until then.
 
 Service-role and `sb_secret_` keys are not in this list. They do not belong in CI.
 
