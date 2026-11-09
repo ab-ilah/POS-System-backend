@@ -10,10 +10,14 @@ Typical sequence:
 
 1. Open a pull request **into `staging`**. CI (`verify`, `rls`) must pass.
 2. Merge the PR to `staging`. The deploy workflow migrates the staging Supabase project.
-3. When staging is verified, Gabriel opens a promotion PR **`staging` → `main`** (or merges per team convention).
-4. After merge to `main`, Gabriel runs the **manual** production database deploy (`workflow_dispatch`, target production). Production signup lock and prod migrations stay gated on the `production` environment.
+3. When staging is verified, Gabriel opens a promotion PR **`staging` → `main`** and merges it. A pull request is required for both `staging` and `main`; direct pushes to either branch are not allowed. Only Gabriel merges or promotes.
+4. After merge to `main`, Gabriel runs the **manual** production database deploy. In GitHub Actions, open **Deploy database**, choose **Run workflow**, pick branch **`main`** in **Use workflow from**, set target **production**, and run. Production signup lock and prod migrations stay gated on the `production` environment.
 
-Do not push directly to `staging` or `main`.
+Do not push directly to `staging` or `main`. Branch protection must block direct pushes to **`staging`**, because a push to `staging` deploys to pos-staging.
+
+### Staging manual rerun
+
+The **Deploy database** workflow can also be run manually for **staging** when a migrate needs a rerun (for example, after a transient failure). **Only Gabriel or repo admins** may do this. In **Use workflow from**, pick branch **`staging`**, set target **staging**, and run. This path is for reruns only; normal schema changes land via merge to `staging`. The job's `github.ref == 'refs/heads/staging'` guard skips deploy when the workflow is dispatched from any other ref.
 
 ## Branch rule for `staging`
 
@@ -25,6 +29,7 @@ Settings → Rules → Rulesets, or classic branch protection. Target `staging`.
 - Require branches to be up to date before merging.
 - Do not allow force pushes.
 - Do not allow deletions.
+- Include administrators. Leave "allow administrators to bypass" off, and do not add a bypass list.
 
 ## Branch rule for `main`
 
@@ -36,7 +41,7 @@ Same protections as `staging`, applied to `main`:
 - Require branches to be up to date before merging.
 - Do not allow force pushes.
 - Do not allow deletions.
-- Include administrators with bypass off.
+- Include administrators. Leave "allow administrators to bypass" off, and do not add a bypass list.
 
 Do not use `pull_request_target` workflows. CI does not read secrets, so a fork pull request has nothing to steal.
 
@@ -62,6 +67,8 @@ No required reviewer. Secrets (names only; Gabriel pastes the values):
 - `STAGING_DB_URL`
 
 Used by the staging database push (on **`staging`** branch) and the staging keepalive.
+
+Deployment branches: Selected branches, **`main`** and **`staging`**. `main` is needed so the staging keepalive can run from the default branch; migrations use `staging`.
 
 ### `production`
 

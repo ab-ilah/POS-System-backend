@@ -77,6 +77,17 @@ describe("workflows", () => {
     expect(production).toContain("refs/heads/main");
     expect(production).toContain("vasbjwzykqoebbtvqnjx");
     expect(production).toContain("workflow_dispatch");
+    expect(deploy).toContain("validate-dispatch");
+    expect(deploy).toContain("Reject production dispatch off main");
+    expect(deploy).toContain("refs/heads/main");
+    expect(deploy).toContain("Reject staging dispatch off staging");
+    expect(deploy).toContain("refs/heads/staging");
+    expect(deploy).toMatch(
+      /inputs\.target == 'production' && github\.ref != 'refs\/heads\/main'/,
+    );
+    expect(deploy).toMatch(
+      /inputs\.target == 'staging' && github\.ref != 'refs\/heads\/staging'/,
+    );
   });
 
   it("pings staging and production on a schedule", () => {

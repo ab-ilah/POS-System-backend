@@ -29,9 +29,32 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  validate-dispatch:
+    name: validate-dispatch
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Reject production dispatch off main
+        if: inputs.target == 'production' && github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::Production database deploy must be workflow_dispatch from branch main (refs/heads/main). Use workflow from main. Current ref is $GITHUB_REF."
+          exit 1
+
+      - name: Reject staging dispatch off staging
+        if: inputs.target == 'staging' && github.ref != 'refs/heads/staging'
+        run: |
+          echo "::error::Staging database rerun must be workflow_dispatch from branch staging (refs/heads/staging). Use workflow from staging. Current ref is $GITHUB_REF."
+          exit 1
+
   deploy-staging:
     name: deploy-staging
-    if: github.ref == 'refs/heads/staging' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.target == 'staging'))
+    needs: validate-dispatch
+    if: >-
+      !failure() && !cancelled() &&
+      (needs.validate-dispatch.result == 'success' || needs.validate-dispatch.result == 'skipped') &&
+      github.ref == 'refs/heads/staging' &&
+      (github.event_name == 'push' ||
+        (github.event_name == 'workflow_dispatch' && inputs.target == 'staging'))
     runs-on: ubuntu-latest
     environment: staging
     timeout-minutes: 20
@@ -62,8 +85,13 @@ jobs:
 
   deploy-production:
     name: deploy-production
-    # Manual only, and only from main. workflow_dispatch on any other ref does not run.
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.target == 'production'
+    # Manual only, and only from main. validate-dispatch fails wrong-ref workflow_dispatch.
+    needs: validate-dispatch
+    if: >-
+      needs.validate-dispatch.result == 'success' &&
+      github.event_name == 'workflow_dispatch' &&
+      github.ref == 'refs/heads/main' &&
+      inputs.target == 'production'
     runs-on: ubuntu-latest
     environment: production
     timeout-minutes: 20
