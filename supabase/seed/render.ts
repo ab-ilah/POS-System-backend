@@ -130,14 +130,14 @@ insert into public.sales (
 ) values
 ${saleRows};
 
-insert into public.sale_lines (
+insert into public.sale_items (
   id,
   sale_id,
   variant_id,
   product_name,
   size_name,
   colour_name,
-  quantity,
+  qty,
   unit_price_pesewas,
   line_total_pesewas
 ) values

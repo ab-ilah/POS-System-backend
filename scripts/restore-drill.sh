@@ -45,7 +45,7 @@ counts() {
     (select count(*) from public.product_variants)::text || ' ' ||
     (select count(*) from public.customers)::text || ' ' ||
     (select count(*) from public.sales)::text || ' ' ||
-    (select count(*) from public.sale_lines)::text"
+    (select count(*) from public.sale_items)::text"
 }
 
 assert_counts() {
@@ -114,9 +114,9 @@ rollback;
 SQL
 
   if psql_exec <<'SQL'
-insert into public.sale_lines (
+insert into public.sale_items (
   sale_id, variant_id, product_name, size_name, colour_name,
-  quantity, unit_price_pesewas, line_total_pesewas
+  qty, unit_price_pesewas, line_total_pesewas
 )
 select sale.id, variant.id, 'Drill', 'M', 'Black', 1, 1000, 1000
 from public.sales as sale
@@ -152,7 +152,7 @@ echo "seeded counts: $expected"
 docker cp "$workdir/pos.dump" "$container:/tmp/pos-restore.dump"
 
 echo "data-only restore onto the migrated schema"
-psql_admin -c "truncate table public.stock_movements, public.sale_lines, public.sales, public.stores, public.customers, public.product_variants, public.products, public.profiles;"
+psql_admin -c "truncate table public.stock_movements, public.sale_items, public.sales, public.stores, public.customers, public.product_variants, public.products, public.profiles;"
 docker exec "$container" pg_restore -U supabase_admin -d postgres \
   --data-only \
   --schema=public \
@@ -170,7 +170,7 @@ psql_admin <<'SQL'
 drop schema if exists private cascade;
 drop table if exists
   public.stock_movements,
-  public.sale_lines,
+  public.sale_items,
   public.sales,
   public.stores,
   public.customers,

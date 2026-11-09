@@ -1,6 +1,5 @@
--- POS-02b: commit_sale RPC, stores, sale_lines rename, stock_movements.
--- Follows ab-ilah/POS-system- src/types/database.ts and docs/commit-sale.md.
--- Existing sale_items is renamed to sale_lines (quantity column) to match the frontend contract.
+-- POS-02b: commit_sale RPC, stores, stock_movements.
+-- Follows ab-ilah/POS-system- docs/commit-sale.md (RPC args use JSON quantity; rows stay in sale_items.qty).
 
 create table public.stores (
   id uuid primary key default gen_random_uuid(),
@@ -30,70 +29,19 @@ alter table public.sales
 
 create index sales_store_id_idx on public.sales (store_id);
 
-alter table public.sale_items rename to sale_lines;
-alter table public.sale_lines rename column qty to quantity;
-
-alter table public.sale_lines
-  rename constraint sale_items_qty_check to sale_lines_quantity_check;
-
-alter table public.sale_lines
-  rename constraint sale_items_unit_price_pesewas_check to sale_lines_unit_price_pesewas_check;
-
-alter table public.sale_lines
-  rename constraint sale_items_line_total_pesewas_check to sale_lines_line_total_pesewas_check;
-
-alter table public.sale_lines
-  drop constraint sale_items_line_total_identity_check;
-
-alter table public.sale_lines
-  add constraint sale_lines_line_total_identity_check check (
-    line_total_pesewas = quantity * unit_price_pesewas
-  );
-
-alter index sale_items_sale_id_idx rename to sale_lines_sale_id_idx;
-alter index sale_items_variant_id_idx rename to sale_lines_variant_id_idx;
-
-alter trigger sale_items_require_open_sale on public.sale_lines rename to sale_lines_require_open_sale;
-
-alter table public.sale_lines enable row level security;
-
-drop policy sale_items_select on public.sale_lines;
-drop policy sale_items_insert on public.sale_lines;
-
-create policy sale_lines_select
-on public.sale_lines
-for select
-to authenticated
-using ((select private.current_app_role()) in ('owner', 'manager', 'cashier'));
-
-create policy sale_lines_insert
-on public.sale_lines
-for insert
-to authenticated
-with check (
-  (select private.current_app_role()) in ('owner', 'manager', 'cashier')
-  and exists (
-    select 1
-    from public.sales as s
-    where s.id = sale_id
-      and s.cashier_id = (select auth.uid())
-      and s.status = 'open'
-  )
-);
-
 create table public.stock_movements (
   id uuid primary key default gen_random_uuid(),
   sale_id uuid not null references public.sales (id) on delete restrict,
-  sale_line_id uuid not null references public.sale_lines (id) on delete restrict,
+  sale_item_id uuid not null references public.sale_items (id) on delete restrict,
   variant_id uuid not null references public.product_variants (id) on delete restrict,
   qty_delta integer not null,
   created_at timestamptz not null default now(),
   constraint stock_movements_qty_delta_check check (qty_delta <> 0),
-  constraint stock_movements_sale_line_id_key unique (sale_line_id)
+  constraint stock_movements_sale_item_id_key unique (sale_item_id)
 );
 
 comment on table public.stock_movements is
-  'Append-only inventory deltas tied to committed sale lines. Negative qty_delta is stock leaving the shelf.';
+  'Append-only inventory deltas tied to committed sale_items rows. Negative qty_delta is stock leaving the shelf.';
 
 create index stock_movements_sale_id_idx on public.stock_movements (sale_id);
 create index stock_movements_variant_id_idx on public.stock_movements (variant_id);
@@ -392,14 +340,14 @@ begin
       join public.products as p on p.id = v.product_id
       where v.id = variant_id;
 
-      insert into public.sale_lines (
+      insert into public.sale_items (
         id,
         sale_id,
         variant_id,
         product_name,
         size_name,
         colour_name,
-        quantity,
+        qty,
         unit_price_pesewas,
         line_total_pesewas
       )
@@ -417,7 +365,7 @@ begin
 
       insert into public.stock_movements (
         sale_id,
-        sale_line_id,
+        sale_item_id,
         variant_id,
         qty_delta
       )
@@ -463,7 +411,7 @@ end;
 $$;
 
 comment on function public.commit_sale(uuid, uuid, jsonb) is
-  'One-shot sale: open header, lines, stock moves, then complete. Idempotent on p_idempotency_key (client sale id).';
+  'One-shot sale: open header, sale_items, stock moves, then complete. Idempotent on p_idempotency_key (client sale id).';
 
 revoke all on function public.commit_sale(uuid, uuid, jsonb) from public, anon, service_role;
 grant execute on function public.commit_sale(uuid, uuid, jsonb) to authenticated;
