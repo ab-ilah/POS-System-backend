@@ -49,9 +49,11 @@ describe("workflows", () => {
     expect(ci).toContain("--remote[=<ref|branch|url>]");
     expect(ci).toContain("scripts/restore-drill.sh");
     expect(ci).toContain("pull_request:");
+    expect(ci).toMatch(/branches:\s*\[main,\s*staging\]/);
+    expect(ci).toMatch(/push:\s*\n\s*branches:\s*\[main,\s*staging\]/s);
   });
 
-  it("pushes staging on main and keeps production manual", () => {
+  it("pushes staging on staging and keeps production manual on main", () => {
     const deploy = workflows["deploy-db.yml"];
     expect(deploy).toBeDefined();
     expect(deploy).toContain("environment: staging");
@@ -65,14 +67,27 @@ describe("workflows", () => {
     expect(deploy).toContain("supabase db push");
     expect(deploy).not.toContain("include-seed");
     expect(deploy).not.toContain("--include-seed");
+    expect(deploy).toContain("branches: [staging]");
+    expect(deploy).not.toMatch(/push:\s*\n\s*branches:\s*\[main\]/);
     const staging = (deploy?.split("deploy-staging:")[1] ?? "").split("deploy-production:")[0] ?? "";
-    expect(staging).toContain("github.ref == 'refs/heads/main'");
+    expect(staging).toContain("github.ref == 'refs/heads/staging'");
     const production = deploy?.split("deploy-production:")[1] ?? "";
     expect(production).toContain("PROD_DB_URL");
     expect(production).not.toContain("STAGING_DB_URL");
     expect(production).toContain("refs/heads/main");
     expect(production).toContain("vasbjwzykqoebbtvqnjx");
     expect(production).toContain("workflow_dispatch");
+    expect(deploy).toContain("validate-dispatch");
+    expect(deploy).toContain("Reject production dispatch off main");
+    expect(deploy).toContain("refs/heads/main");
+    expect(deploy).toContain("Reject staging dispatch off staging");
+    expect(deploy).toContain("refs/heads/staging");
+    expect(deploy).toMatch(
+      /inputs\.target == 'production' && github\.ref != 'refs\/heads\/main'/,
+    );
+    expect(deploy).toMatch(
+      /inputs\.target == 'staging' && github\.ref != 'refs\/heads\/staging'/,
+    );
   });
 
   it("pings staging and production on a schedule", () => {
