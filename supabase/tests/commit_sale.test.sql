@@ -37,6 +37,8 @@ select
     limit 1
   ) as zero_stock_variant_id;
 
+grant select on table commit_fixture to authenticated;
+
 select set_config(
   'request.jwt.claims',
   (select json_build_object('sub', cashier_id, 'role', 'authenticated')::text from commit_fixture),
