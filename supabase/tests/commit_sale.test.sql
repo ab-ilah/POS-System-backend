@@ -221,19 +221,13 @@ select throws_ok(
   'wrong store id is rejected'
 );
 
-select is(
-  (
-    with updated as (
-      update public.product_variants as v
-      set stock_qty = v.stock_qty - 1
-      where v.id = (select stocked_variant_id from commit_fixture)
-      returning v.id
-    )
-    select count(*)::int from updated
-  ),
-  0,
-  'cashier cannot update stock_qty directly'
-);
+with updated as (
+  update public.product_variants as v
+  set stock_qty = v.stock_qty - 1
+  where v.id = (select stocked_variant_id from commit_fixture)
+  returning v.id
+)
+select is((select count(*)::int from updated), 0, 'cashier cannot update stock_qty directly');
 
 select set_config('private.commit_sale_active', '1', true);
 
