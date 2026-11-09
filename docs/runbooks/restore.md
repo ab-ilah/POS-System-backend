@@ -131,7 +131,7 @@ union all select 'products', count(*) from public.products
 union all select 'product_variants', count(*) from public.product_variants
 union all select 'customers', count(*) from public.customers
 union all select 'sales', count(*) from public.sales
-union all select 'sale_lines', count(*) from public.sale_lines;
+union all select 'sale_items', count(*) from public.sale_items;
 ```
 
 2. Migration version:
@@ -150,7 +150,7 @@ Compare that list with `supabase/migrations` at the commit you believe the backu
 select relname, relrowsecurity
 from pg_class
 where relnamespace = 'public'::regnamespace
-  and relname in ('profiles', 'products', 'product_variants', 'customers', 'sales', 'sale_lines');
+  and relname in ('profiles', 'products', 'product_variants', 'customers', 'sales', 'sale_items');
 ```
 
 Each `relrowsecurity` value must be true.

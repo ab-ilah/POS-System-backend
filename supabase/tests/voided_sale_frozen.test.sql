@@ -6,7 +6,6 @@ set search_path = extensions, public, pg_temp;
 select plan(5);
 
 insert into public.sales (
-  store_id,
   id,
   receipt_no,
   cashier_id,
@@ -20,8 +19,7 @@ insert into public.sales (
   credit_applied_pesewas
 )
 select
-  'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'::uuid,
-  '99999999-9999-4999-8999-999999999999'::uuid,
+  '99999999-9999-4999-8999-999999999999',
   'PGTAP-FROZEN-VOID',
   id,
   'voided',

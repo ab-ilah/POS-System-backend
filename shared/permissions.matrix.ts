@@ -19,10 +19,8 @@ export const TABLES = [
   "products",
   "product_variants",
   "customers",
-  "stores",
   "sales",
-  "sale_lines",
-  "stock_movements",
+  "sale_items",
 ] as const;
 export type TableName = (typeof TABLES)[number];
 
@@ -50,30 +48,24 @@ const ACCESS: {
     products: { select: "allow", insert: "allow", update: "allow", delete: "allow" },
     product_variants: { select: "allow", insert: "allow", update: "allow", delete: "allow" },
     customers: { select: "allow", insert: "allow", update: "allow", delete: "allow" },
-    stores: { select: "allow", insert: "allow", update: "allow", delete: "allow" },
     sales: { select: "allow", insert: "allow", update: "allow", delete: "deny" },
-    sale_lines: { select: "allow", insert: "allow", update: "deny", delete: "deny" },
-    stock_movements: { select: "allow", insert: "allow", update: "deny", delete: "deny" },
+    sale_items: { select: "allow", insert: "allow", update: "deny", delete: "deny" },
   },
   manager: {
     profiles: { select: "allow", insert: "deny", update: "allow", delete: "deny" },
     products: { select: "allow", insert: "allow", update: "allow", delete: "allow" },
     product_variants: { select: "allow", insert: "allow", update: "allow", delete: "allow" },
     customers: { select: "allow", insert: "allow", update: "allow", delete: "allow" },
-    stores: { select: "allow", insert: "allow", update: "allow", delete: "deny" },
     sales: { select: "allow", insert: "allow", update: "allow", delete: "deny" },
-    sale_lines: { select: "allow", insert: "allow", update: "deny", delete: "deny" },
-    stock_movements: { select: "allow", insert: "allow", update: "deny", delete: "deny" },
+    sale_items: { select: "allow", insert: "allow", update: "deny", delete: "deny" },
   },
   cashier: {
     profiles: { select: "allow", insert: "deny", update: "allow", delete: "deny" },
     products: { select: "allow", insert: "deny", update: "deny", delete: "deny" },
     product_variants: { select: "allow", insert: "deny", update: "deny", delete: "deny" },
     customers: { select: "allow", insert: "allow", update: "allow", delete: "deny" },
-    stores: { select: "allow", insert: "deny", update: "deny", delete: "deny" },
     sales: { select: "allow", insert: "allow", update: "deny", delete: "deny" },
-    sale_lines: { select: "allow", insert: "allow", update: "deny", delete: "deny" },
-    stock_movements: { select: "allow", insert: "allow", update: "deny", delete: "deny" },
+    sale_items: { select: "allow", insert: "allow", update: "deny", delete: "deny" },
   },
 };
 
@@ -87,11 +79,8 @@ export const PERMISSION_SCOPE_NOTES: Readonly<Record<TableName, string>> = {
     "Cashiers can register a customer at a zero credit balance and update name and phone. Only an authenticated owner can set or change credit_balance_pesewas. A service-role JWT is denied even when its subject is the owner. Cashiers cannot delete a customer.",
   sales:
     "Any staff member can record a sale attributed to themselves. An authenticated owner or manager can complete an open sale or void a sale. Amounts stay immutable. Once a sale is voided, every update is rejected. Nobody deletes a sale.",
-  stores: "Owner and manager maintain store rows. Cashiers read the default store at the till.",
-  sale_lines:
-    "A line can be inserted only on an open sale whose cashier is the signed-in staff member. Completed and voided sales reject new lines, line edits, line deletes, and moving a line to another sale. Corrections are a void plus a new sale. commit_sale inserts lines during its own transaction.",
-  stock_movements:
-    "Append-only stock deltas from committed sales. Direct inserts follow the same staff roles as sale_lines; routine commits happen inside commit_sale.",
+  sale_items:
+    "A line can be inserted only on an open sale whose cashier is the signed-in staff member. Completed and voided sales reject new lines, line edits, line deletes, and moving a line to another sale. Corrections are a void plus a new sale.",
 };
 
 function flatten(): readonly PermissionRow[] {
