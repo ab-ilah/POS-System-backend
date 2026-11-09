@@ -104,7 +104,7 @@ async function selectCount(tx: Tx, table: TableName): Promise<number> {
     await tx`select 1 from public.stock_movements limit 1`;
     return 1;
   }
-  const rows = await tx<{ n: number }[]>`select count(*)::int as n from public.sale_lines`;
+  const rows = await tx<{ n: number }[]>`select count(*)::int as n from public.sale_items`;
   return Number(rows[0]?.n ?? 0);
 }
 
@@ -185,7 +185,7 @@ async function insertProbe(tx: Tx, table: TableName): Promise<void> {
     await tx`
       insert into public.stock_movements (
         sale_id,
-        sale_line_id,
+        sale_item_id,
         variant_id,
         qty_delta
       ) values (
@@ -228,13 +228,13 @@ async function insertProbe(tx: Tx, table: TableName): Promise<void> {
     throw new Error("own sale was not created");
   }
   await tx`
-    insert into public.sale_lines (
+    insert into public.sale_items (
       sale_id,
       variant_id,
       product_name,
       size_name,
       colour_name,
-      quantity,
+      qty,
       unit_price_pesewas,
       line_total_pesewas
     ) values (
@@ -305,13 +305,13 @@ async function updateProbe(tx: Tx, role: Role, table: TableName): Promise<number
     const result = await tx`
       update public.stock_movements
       set qty_delta = qty_delta
-      where sale_line_id = ${model.targets.updateSaleItemId}::uuid
+      where sale_item_id = ${model.targets.updateSaleItemId}::uuid
     `;
     return Number(result.count);
   }
   const result = await tx`
-    update public.sale_lines
-    set quantity = quantity
+    update public.sale_items
+    set qty = qty
     where id = ${model.targets.updateSaleItemId}::uuid
   `;
   return Number(result.count);
@@ -365,12 +365,12 @@ async function deleteProbe(tx: Tx, table: TableName): Promise<number> {
   if (table === "stock_movements") {
     const result = await tx`
       delete from public.stock_movements
-      where sale_line_id = ${model.targets.updateSaleItemId}::uuid
+      where sale_item_id = ${model.targets.updateSaleItemId}::uuid
     `;
     return Number(result.count);
   }
   const result = await tx`
-    delete from public.sale_lines
+    delete from public.sale_items
     where id = ${model.targets.updateSaleItemId}::uuid
   `;
   return Number(result.count);
@@ -584,9 +584,9 @@ describe("RLS matches the permission matrix", () => {
     await expect(
       asUser(userForRole("cashier").id, async (tx) => {
         await tx`
-          insert into public.sale_lines (
+          insert into public.sale_items (
             sale_id, variant_id, product_name, size_name, colour_name,
-            quantity, unit_price_pesewas, line_total_pesewas
+            qty, unit_price_pesewas, line_total_pesewas
           ) values (
             ${ownSaleId}::uuid,
             ${model.targets.probeVariantId}::uuid,
@@ -605,9 +605,9 @@ describe("RLS matches the permission matrix", () => {
     await expect(
       asUser(userForRole("cashier").id, async (tx) => {
         await tx`
-          insert into public.sale_lines (
+          insert into public.sale_items (
             sale_id, variant_id, product_name, size_name, colour_name,
-            quantity, unit_price_pesewas, line_total_pesewas
+            qty, unit_price_pesewas, line_total_pesewas
           ) values (
             ${managerSaleId}::uuid,
             ${model.targets.probeVariantId}::uuid,

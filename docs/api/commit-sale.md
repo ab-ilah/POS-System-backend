@@ -35,15 +35,15 @@ On idempotency replay, `replayed` is `true` and the function performs no writes.
 
 1. **Staff only** — Authenticated JWT with `role = authenticated` and an `owner`, `manager`, or `cashier` `app_metadata` role. `anon` and `service_role` are rejected (`42501`).
 2. **Idempotency** — Transaction-scoped advisory lock on the key. An existing `sales` row with that id returns the replay payload with no extra lines, stock moves, or stock changes.
-3. **One transaction** — Insert `open` sale, `sale_lines`, `stock_movements`, decrement `product_variants.stock_qty` (via `private.stock_qty_apply_for_commit`), then set `completed`. Any failure rolls back everything.
+3. **One transaction** — Insert `open` sale, `sale_items`, `stock_movements`, decrement `product_variants.stock_qty` (via `private.stock_qty_apply_for_commit`), then set `completed`. Any failure rolls back everything.
 4. **Stock** — Variants are locked `FOR UPDATE` in a deterministic `variant_id` order. Sales that would drive stock below zero raise `PSTCK` / `insufficient stock`.
 5. **Pricing** — Each line’s `unit_price_pesewas` must match the current shelf `price_pesewas`. Header `total_pesewas` is computed as `sum(quantity * unit_price_pesewas)`; tendered equals total with zero change and no credit on commit.
 6. **Triggers** — Inserts lines on an `open` sale, then completes through the existing sale update rules.
 
 ## Schema notes
 
-- `sale_items` was renamed to **`sale_lines`** (`quantity` column) to match the frontend table name.
-- **`stores`** and **`stock_movements`** were added. Re-sync `shared/permissions.matrix.ts` in the frontend after this migration lands.
+- Line rows stay in **`sale_items`** (`qty` column). The RPC JSON field is `quantity`; it maps to `sale_items.qty`. The frontend (PR #6) already targets `sale_items`, so this migration does **not** rename the table.
+- **`stores`** and **`stock_movements`** (`sale_item_id` FK) were added. Re-sync `shared/permissions.matrix.ts` in the frontend after merge.
 
 ## Errors
 

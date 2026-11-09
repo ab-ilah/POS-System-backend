@@ -364,14 +364,14 @@ insert into public.sales (
   ('40000000-0000-4000-8000-000000000003'::uuid, 'POS-0003', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'::uuid, '30000000-0000-4000-8000-000000000002'::uuid, '22222222-2222-4222-8222-222222222222'::uuid, 'open', 97000, 97000, 100000, 3000, 0),
   ('40000000-0000-4000-8000-000000000004'::uuid, 'POS-0004', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'::uuid, '30000000-0000-4000-8000-000000000005'::uuid, '33333333-3333-4333-8333-333333333333'::uuid, 'open', 120000, 120000, 120000, 0, 0);
 
-insert into public.sale_lines (
+insert into public.sale_items (
   id,
   sale_id,
   variant_id,
   product_name,
   size_name,
   colour_name,
-  quantity,
+  qty,
   unit_price_pesewas,
   line_total_pesewas
 ) values
