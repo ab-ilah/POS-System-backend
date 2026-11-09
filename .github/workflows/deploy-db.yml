@@ -1,5 +1,5 @@
-# Schema deploy. Staging runs on every merge to main.
-# Production is manual (workflow_dispatch) and uses the production environment.
+# Schema deploy. Staging runs on every push to the staging branch.
+# Production is manual (workflow_dispatch) from main and uses the production environment.
 # GitHub cannot name the reviewer inside this file. Gabriel must set himself
 # as a required reviewer on the production environment. See docs/branch-protection.md.
 # This workflow does not load seed data.
@@ -10,7 +10,7 @@ name: Deploy database
 
 on:
   push:
-    branches: [main]
+    branches: [staging]
   workflow_dispatch:
     inputs:
       target:
@@ -31,7 +31,7 @@ concurrency:
 jobs:
   deploy-staging:
     name: deploy-staging
-    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.target == 'staging'))
+    if: github.ref == 'refs/heads/staging' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.target == 'staging'))
     runs-on: ubuntu-latest
     environment: staging
     timeout-minutes: 20

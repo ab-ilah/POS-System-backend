@@ -2,18 +2,43 @@
 
 Gabriel applies these settings in GitHub. The workflow files cannot enforce them.
 
-## Branch rule for `main`
+## Flow: `staging` → `main`
 
-Settings → Rules → Rulesets, or Settings → Branches → Add classic branch protection rule. Target `main`.
+Integration work merges into **`staging`**. That branch auto-deploys to **pos-staging** when migrations land. **Only Gabriel promotes** from `staging` to `main` (production path). Nobody else merges to `main`.
+
+Typical sequence:
+
+1. Open a pull request **into `staging`**. CI (`verify`, `rls`) must pass.
+2. Merge the PR to `staging`. The deploy workflow migrates the staging Supabase project.
+3. When staging is verified, Gabriel opens a promotion PR **`staging` → `main`** (or merges per team convention).
+4. After merge to `main`, Gabriel runs the **manual** production database deploy (`workflow_dispatch`, target production). Production signup lock and prod migrations stay gated on the `production` environment.
+
+Do not push directly to `staging` or `main`.
+
+## Branch rule for `staging`
+
+Settings → Rules → Rulesets, or classic branch protection. Target `staging`.
 
 - Require a pull request before merging.
-- Require 1 approval. Gabriel is the reviewer. GitHub's classic rule counts any person with write access, so also add a ruleset or code owner rule that names his GitHub login once he confirms it. Do not put a guessed login in this repo.
-- Require status checks to pass before merging. After the first CI run on this repo, require both jobs from the CI workflow: `verify` and `rls`.
+- Require 1 approval (Gabriel or delegate per team policy).
+- Require status checks: `verify` and `rls` from the CI workflow.
 - Require branches to be up to date before merging.
 - Do not allow force pushes.
 - Do not allow deletions.
-- Include administrators. Leave "allow administrators to bypass" off, and do not add a bypass list.
-- Do not use `pull_request_target` workflows. CI does not read secrets, so a fork pull request has nothing to steal.
+
+## Branch rule for `main`
+
+Same protections as `staging`, applied to `main`:
+
+- Require a pull request before merging.
+- Require 1 approval. Gabriel is the reviewer for production promotion. Add a ruleset or code owner rule that names his GitHub login once confirmed.
+- Require status checks: `verify` and `rls`.
+- Require branches to be up to date before merging.
+- Do not allow force pushes.
+- Do not allow deletions.
+- Include administrators with bypass off.
+
+Do not use `pull_request_target` workflows. CI does not read secrets, so a fork pull request has nothing to steal.
 
 ## Secret scanning
 
@@ -36,13 +61,13 @@ No required reviewer. Secrets (names only; Gabriel pastes the values):
 - `SUPABASE_ACCESS_TOKEN`
 - `STAGING_DB_URL`
 
-Used by the staging database push and the staging keepalive.
+Used by the staging database push (on **`staging`** branch) and the staging keepalive.
 
 ### `production`
 
 Required reviewer: Gabriel. This gates the manual production database push and the auth-config update that turns signup off.
 
-Deployment branches: Selected branches, `main` only. The workflow also refuses the job unless `github.ref` is `refs/heads/main`. Set the environment rule as well, so a workflow edit cannot widen the gate by itself.
+Deployment branches: Selected branches, **`main` only**. The workflow also refuses the job unless `github.ref` is `refs/heads/main`. Set the environment rule as well, so a workflow edit cannot widen the gate by itself.
 
 Secrets:
 
@@ -53,7 +78,7 @@ Secrets:
 
 No required reviewer. This environment exists so the daily production keepalive and the nightly backup do not wait for an approval. It must not be used for migrations.
 
-Deployment branches: Selected branches, `main` only. The keepalive and backup jobs also require `github.ref == 'refs/heads/main'`. A manual run from another branch must not reach production.
+Deployment branches: Selected branches, **`main` only**. The keepalive and backup jobs also require `github.ref == 'refs/heads/main'`. A manual run from another branch must not reach production.
 
 Secrets, and nothing else:
 
