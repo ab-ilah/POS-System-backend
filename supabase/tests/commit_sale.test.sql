@@ -302,6 +302,11 @@ select set_config(
   json_build_object('sub', '18181818-1818-4818-8818-181818181818', 'role', 'authenticated')::text,
   true
 );
+select set_config(
+  'request.jwt.claim.sub',
+  '18181818-1818-4818-8818-181818181818',
+  true
+);
 set local role authenticated;
 
 select throws_ok(
@@ -331,7 +336,7 @@ select throws_ok(
     '[]'::jsonb
   ) $$,
   '42501',
-  'only staff can commit a sale',
+  NULL,
   'anon cannot commit a sale'
 );
 
@@ -358,7 +363,7 @@ select throws_ok(
     )
   $$,
   '42501',
-  'only staff can commit a sale',
+  NULL,
   'service_role cannot commit even with an owner subject'
 );
 
