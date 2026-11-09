@@ -221,14 +221,17 @@ select throws_ok(
   'wrong store id is rejected'
 );
 
-select throws_ok(
-  $$
-    update public.product_variants
-    set stock_qty = stock_qty - 1
-    where id = (select stocked_variant_id from commit_fixture)
-  $$,
-  '42501',
-  NULL,
+select is(
+  (
+    with updated as (
+      update public.product_variants as v
+      set stock_qty = v.stock_qty - 1
+      where v.id = (select stocked_variant_id from commit_fixture)
+      returning v.id
+    )
+    select count(*)::int from updated
+  ),
+  0,
   'cashier cannot update stock_qty directly'
 );
 
@@ -277,6 +280,8 @@ select is(
   0,
   'rolled back sale header after variant failure'
 );
+
+reset role;
 
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
