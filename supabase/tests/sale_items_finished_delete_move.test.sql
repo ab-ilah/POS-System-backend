@@ -6,10 +6,12 @@ set search_path = extensions, public, pg_temp;
 select plan(8);
 
 insert into public.sales (
+  store_id,
   id, receipt_no, cashier_id, status,
   subtotal_pesewas, total_pesewas, tendered_pesewas, change_pesewas, credit_applied_pesewas
 )
 select
+  'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'::uuid,
   id, receipt_no, cashier_id, 'open', 1000, 1000, 1000, 0, 0
 from (
   values
@@ -21,9 +23,9 @@ cross join lateral (
   select id as cashier_id from auth.users where email = 'cashier@example.com'
 ) as cashier;
 
-insert into public.sale_items (
+insert into public.sale_lines (
   id, sale_id, variant_id, product_name, size_name, colour_name,
-  qty, unit_price_pesewas, line_total_pesewas
+  quantity, unit_price_pesewas, line_total_pesewas
 )
 select
   item_id, sale_id, variant.id, 'Probe', 'M', 'Black', 1, 1000, 1000
@@ -42,7 +44,7 @@ where id = '77777777-7777-4777-8777-777777777772';
 
 select throws_ok(
   $$
-    delete from public.sale_items
+    delete from public.sale_lines
     where sale_id in (select id from public.sales where status = 'completed')
   $$,
   '42501',
@@ -52,7 +54,7 @@ select throws_ok(
 
 select throws_ok(
   $$
-    delete from public.sale_items
+    delete from public.sale_lines
     where id = '77777777-7777-4777-8777-777777777782'
   $$,
   '42501',
@@ -62,7 +64,7 @@ select throws_ok(
 
 select throws_ok(
   $$
-    update public.sale_items
+    update public.sale_lines
     set sale_id = '77777777-7777-4777-8777-777777777771'
     where sale_id in (select id from public.sales where status = 'completed')
   $$,
@@ -73,7 +75,7 @@ select throws_ok(
 
 select throws_ok(
   $$
-    update public.sale_items
+    update public.sale_lines
     set sale_id = (select id from public.sales where status = 'completed' limit 1)
     where id = '77777777-7777-4777-8777-777777777781'
   $$,
@@ -86,7 +88,7 @@ set local role service_role;
 
 select throws_ok(
   $$
-    delete from public.sale_items
+    delete from public.sale_lines
     where sale_id in (select id from public.sales where status = 'completed')
   $$,
   '42501',
@@ -96,7 +98,7 @@ select throws_ok(
 
 select throws_ok(
   $$
-    update public.sale_items
+    update public.sale_lines
     set sale_id = '77777777-7777-4777-8777-777777777771'
     where id = '77777777-7777-4777-8777-777777777782'
   $$,
@@ -107,7 +109,7 @@ select throws_ok(
 
 select lives_ok(
   $$
-    update public.sale_items
+    update public.sale_lines
     set sale_id = '77777777-7777-4777-8777-777777777773'
     where id = '77777777-7777-4777-8777-777777777781'
   $$,
@@ -116,7 +118,7 @@ select lives_ok(
 
 select lives_ok(
   $$
-    delete from public.sale_items
+    delete from public.sale_lines
     where id = '77777777-7777-4777-8777-777777777781'
   $$,
   'service_role can delete a line from an open sale'

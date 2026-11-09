@@ -1,8 +1,12 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { ROLES, TABLES } from "../shared/permissions.matrix.ts";
 
-const migration = readFileSync("supabase/migrations/20261103215722_init_pos.sql", "utf8");
+const migration = readdirSync("supabase/migrations")
+  .sort()
+  .map((name) => readFileSync(join("supabase/migrations", name), "utf8"))
+  .join("\n");
 const config = readFileSync("supabase/config.toml", "utf8");
 const lowered = migration.toLowerCase();
 
