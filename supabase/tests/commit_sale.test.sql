@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set search_path = extensions, public, pg_temp;
 
-select plan(25);
+select plan(29);
 
 create temporary table commit_fixture as
 select
@@ -35,7 +35,23 @@ select
     from public.product_variants
     where stock_qty = 0
     limit 1
-  ) as zero_stock_variant_id;
+  ) as zero_stock_variant_id,
+  (
+    select id
+    from public.product_variants
+    where stock_qty >= 3
+    order by sku
+    offset 1
+    limit 1
+  ) as second_variant_id,
+  (
+    select price_pesewas
+    from public.product_variants
+    where stock_qty >= 3
+    order by sku
+    offset 1
+    limit 1
+  ) as second_shelf_price;
 
 grant select on table commit_fixture to authenticated;
 
@@ -240,6 +256,133 @@ select throws_ok(
   'PSTCK',
   'insufficient stock',
   'repeated variant lines aggregate qty before stock check'
+);
+
+select throws_ok(
+  $$
+    select public.commit_sale(
+      '3a3a3a3a-3a3a-43a3-83a3-3a3a3a3a3a3a'::uuid,
+      (select store_id from commit_fixture),
+      jsonb_build_array(
+        jsonb_build_object(
+          'id', '3b3b3b3b-3b3b-43b3-83b3-3b3b3b3b3b3b',
+          'variant_id', (select stocked_variant_id from commit_fixture),
+          'quantity', 1,
+          'unit_price_pesewas', (select shelf_price from commit_fixture)
+        ),
+        jsonb_build_object(
+          'id', '3b3b3b3b-3b3b-43b3-83b3-3b3b3b3b3b3b',
+          'variant_id', (select stocked_variant_id from commit_fixture),
+          'quantity', 1,
+          'unit_price_pesewas', (select shelf_price from commit_fixture)
+        )
+      )
+    )
+  $$,
+  'P0005',
+  'duplicate sale line id',
+  'first commit rejects duplicate line ids in the payload'
+);
+
+select lives_ok(
+  $$
+    select public.commit_sale(
+      '3d3d3d3d-3d3d-43d3-83d3-3d3d3d3d3d3d'::uuid,
+      (select store_id from commit_fixture),
+      jsonb_build_array(
+        jsonb_build_object(
+          'id', '3e3e3e3e-3e3e-43e3-83e3-3e3e3e3e3e3e',
+          'variant_id', (select stocked_variant_id from commit_fixture),
+          'quantity', 1,
+          'unit_price_pesewas', (select shelf_price from commit_fixture)
+        ),
+        jsonb_build_object(
+          'id', '3f3f3f3f-3f3f-43f3-83f3-3f3f3f3f3f3f',
+          'variant_id', (select second_variant_id from commit_fixture),
+          'quantity', 1,
+          'unit_price_pesewas', (select second_shelf_price from commit_fixture)
+        )
+      )
+    )
+  $$,
+  'two-line commit succeeds'
+);
+
+select throws_ok(
+  $$
+    select public.commit_sale(
+      '3d3d3d3d-3d3d-43d3-83d3-3d3d3d3d3d3d'::uuid,
+      (select store_id from commit_fixture),
+      jsonb_build_array(
+        jsonb_build_object(
+          'id', '3e3e3e3e-3e3e-43e3-83e3-3e3e3e3e3e3e',
+          'variant_id', (select stocked_variant_id from commit_fixture),
+          'quantity', 1,
+          'unit_price_pesewas', (select shelf_price from commit_fixture)
+        ),
+        jsonb_build_object(
+          'id', '3e3e3e3e-3e3e-43e3-83e3-3e3e3e3e3e3e',
+          'variant_id', (select second_variant_id from commit_fixture),
+          'quantity', 1,
+          'unit_price_pesewas', (select second_shelf_price from commit_fixture)
+        )
+      )
+    )
+  $$,
+  'P0005',
+  'duplicate sale line id',
+  'replay with duplicate line id is rejected before multiset match'
+);
+
+select throws_ok(
+  $$
+    select public.commit_sale(
+      '3d3d3d3d-3d3d-43d3-83d3-3d3d3d3d3d3d'::uuid,
+      (select store_id from commit_fixture),
+      jsonb_build_array(
+        jsonb_build_object(
+          'id', '3e3e3e3e-3e3e-43e3-83e3-3e3e3e3e3e3e',
+          'variant_id', (select stocked_variant_id from commit_fixture),
+          'quantity', 1,
+          'unit_price_pesewas', (select shelf_price from commit_fixture)
+        ),
+        jsonb_build_object(
+          'id', '40000000-0000-4000-8000-000000000001'::uuid,
+          'variant_id', (select second_variant_id from commit_fixture),
+          'quantity', 1,
+          'unit_price_pesewas', (select second_shelf_price from commit_fixture)
+        )
+      )
+    )
+  $$,
+  'P0004',
+  'idempotency_key_reuse',
+  'extra line on replay is rejected via multiset compare'
+);
+
+select results_eq(
+  $$
+    select (public.commit_sale(
+      '3d3d3d3d-3d3d-43d3-83d3-3d3d3d3d3d3d'::uuid,
+      (select store_id from commit_fixture),
+      jsonb_build_array(
+        jsonb_build_object(
+          'id', '3f3f3f3f-3f3f-43f3-83f3-3f3f3f3f3f3f',
+          'variant_id', (select second_variant_id from commit_fixture),
+          'quantity', 1,
+          'unit_price_pesewas', (select second_shelf_price from commit_fixture)
+        ),
+        jsonb_build_object(
+          'id', '3e3e3e3e-3e3e-43e3-83e3-3e3e3e3e3e3e',
+          'variant_id', (select stocked_variant_id from commit_fixture),
+          'quantity', 1,
+          'unit_price_pesewas', (select shelf_price from commit_fixture)
+        )
+      )
+    ) ->> 'replayed')::boolean
+  $$,
+  $$ values (true) $$,
+  'reordered lines with the same multiset replay ok'
 );
 
 select throws_ok(

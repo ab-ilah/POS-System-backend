@@ -1,4 +1,38 @@
 -- commit_sale: idempotent replay payload checks, aggregated stock pre-check, stock_movements insert lockdown.
+-- stock_movements rows are written only by commit_sale (SECURITY DEFINER as postgres); service_role has no INSERT.
+
+create or replace function private.commit_sale_assert_lines_payload(p_lines jsonb)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  line jsonb;
+  line_id uuid;
+  line_ids uuid[] := '{}';
+begin
+  if p_lines is null or jsonb_typeof(p_lines) <> 'array' then
+    raise exception 'invalid sale line'
+      using errcode = 'P0004';
+  end if;
+  for line in select elem from jsonb_array_elements(p_lines) as t(elem) loop
+    line_id := (line ->> 'id')::uuid;
+    if line_id is null then
+      raise exception 'invalid sale line'
+        using errcode = 'P0004';
+    end if;
+    if line_id = any (line_ids) then
+      raise exception 'duplicate sale line id'
+        using errcode = 'P0005';
+    end if;
+    line_ids := line_ids || line_id;
+  end loop;
+end;
+$$;
+
+revoke all on function private.commit_sale_assert_lines_payload(jsonb) from public, anon, authenticated, service_role;
+grant execute on function private.commit_sale_assert_lines_payload(jsonb) to postgres;
 
 create or replace function private.commit_sale_payload_matches(
   p_sale_id uuid,
@@ -13,11 +47,32 @@ set search_path = ''
 as $$
   with payload_lines as (
     select
-      (elem ->> 'id')::uuid as line_id,
       (elem ->> 'variant_id')::uuid as variant_id,
       (elem ->> 'quantity')::integer as qty,
       (elem ->> 'unit_price_pesewas')::integer as unit_price_pesewas
     from jsonb_array_elements(p_lines) as t(elem)
+  ),
+  payload_multiset as (
+    select
+      variant_id,
+      qty,
+      unit_price_pesewas,
+      count(*)::integer as line_count
+    from payload_lines
+    where variant_id is not null
+      and qty is not null
+      and unit_price_pesewas is not null
+    group by 1, 2, 3
+  ),
+  sale_multiset as (
+    select
+      variant_id,
+      qty,
+      unit_price_pesewas,
+      count(*)::integer as line_count
+    from public.sale_items
+    where sale_id = p_sale_id
+    group by 1, 2, 3
   )
   select exists (
     select 1
@@ -25,24 +80,19 @@ as $$
     where s.id = p_sale_id
       and s.store_id = p_store_id
   )
-  and (
-    select count(*)::bigint
-    from payload_lines
-  ) = (
-    select count(*)::bigint
-    from public.sale_items as si
-    where si.sale_id = p_sale_id
+  and not exists (
+    select variant_id, qty, unit_price_pesewas, line_count
+    from payload_multiset
+    except
+    select variant_id, qty, unit_price_pesewas, line_count
+    from sale_multiset
   )
   and not exists (
-    select 1
-    from payload_lines as p
-    left join public.sale_items as si
-      on si.sale_id = p_sale_id
-     and si.id = p.line_id
-    where si.id is null
-       or si.variant_id is distinct from p.variant_id
-       or si.qty is distinct from p.qty
-       or si.unit_price_pesewas is distinct from p.unit_price_pesewas
+    select variant_id, qty, unit_price_pesewas, line_count
+    from sale_multiset
+    except
+    select variant_id, qty, unit_price_pesewas, line_count
+    from payload_multiset
   );
 $$;
 
@@ -51,7 +101,7 @@ grant execute on function private.commit_sale_payload_matches(uuid, uuid, jsonb)
 
 drop policy if exists stock_movements_insert on public.stock_movements;
 
-revoke insert on table public.stock_movements from authenticated;
+revoke insert on table public.stock_movements from authenticated, service_role;
 
 create or replace function public.commit_sale(
   p_idempotency_key uuid,
@@ -119,6 +169,7 @@ begin
   where s.id = p_idempotency_key;
 
   if found then
+    perform private.commit_sale_assert_lines_payload(p_lines);
     if not private.commit_sale_payload_matches(p_idempotency_key, p_store_id, p_lines) then
       raise exception 'idempotency_key_reuse'
         using errcode = 'P0004';
@@ -335,6 +386,7 @@ begin
       from public.sales as s
       where s.id = p_idempotency_key;
       if found then
+        perform private.commit_sale_assert_lines_payload(p_lines);
         if not private.commit_sale_payload_matches(p_idempotency_key, p_store_id, p_lines) then
           raise exception 'idempotency_key_reuse'
             using errcode = 'P0004';

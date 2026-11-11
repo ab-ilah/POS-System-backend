@@ -181,6 +181,7 @@ drop table if exists
   public.profiles
 cascade;
 drop function if exists public.commit_sale(uuid, uuid, jsonb) cascade;
+drop function if exists private.commit_sale_assert_lines_payload(jsonb) cascade;
 drop function if exists private.commit_sale_payload_matches(uuid, uuid, jsonb) cascade;
 drop function if exists private.stock_qty_apply_for_commit(uuid, integer) cascade;
 drop function if exists public.assign_staff_role(uuid, public.app_role);
