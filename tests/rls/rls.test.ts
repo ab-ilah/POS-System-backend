@@ -347,13 +347,27 @@ async function deleteProbe(tx: Tx, table: TableName): Promise<number> {
     return Number(result.count);
   }
   if (table === "stores") {
-    const result = await tx`
-      with ins as (
-        insert into public.stores (name) values ('RLS Delete Probe') returning id
-      )
-      delete from public.stores where id in (select id from ins)
-    `;
-    return Number(result.count);
+    try {
+      const inserted = await tx<{ id: string }[]>`
+        insert into public.stores (name)
+        values ('RLS Delete Probe')
+        returning id::text as id
+      `;
+      const storeId = inserted[0]?.id;
+      if (!storeId) {
+        return 0;
+      }
+      const result = await tx`
+        delete from public.stores
+        where id = ${storeId}::uuid
+      `;
+      return Number(result.count);
+    } catch (error) {
+      if (isDeny(error)) {
+        return 0;
+      }
+      throw error;
+    }
   }
   if (table === "sales") {
     const result = await tx`

@@ -35,14 +35,6 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Cache Deno
-        uses: actions/cache@6849e6472947ad7f23a9ea52354147b286a1c4ead # v4.2.2
-        with:
-          path: ~/.deno
-          key: deno-v2-${{ runner.os }}-${{ hashFiles('.github/workflows/ci.yml') }}
-          restore-keys: |
-            deno-v2-${{ runner.os }}-
-
       - name: Setup Deno
         id: setup-deno
         uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
