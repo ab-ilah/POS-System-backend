@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set search_path = extensions, public, pg_temp;
 
-select plan(29);
+select plan(30);
 
 create temporary table commit_fixture as
 select
@@ -345,19 +345,13 @@ select throws_ok(
           'variant_id', (select stocked_variant_id from commit_fixture),
           'quantity', 1,
           'unit_price_pesewas', (select shelf_price from commit_fixture)
-        ),
-        jsonb_build_object(
-          'id', '40000000-0000-4000-8000-000000000001'::uuid,
-          'variant_id', (select second_variant_id from commit_fixture),
-          'quantity', 1,
-          'unit_price_pesewas', (select second_shelf_price from commit_fixture)
         )
       )
     )
   $$,
   'P0004',
   'idempotency_key_reuse',
-  'extra line on replay is rejected via multiset compare'
+  'missing line on replay is rejected via multiset compare'
 );
 
 select results_eq(
