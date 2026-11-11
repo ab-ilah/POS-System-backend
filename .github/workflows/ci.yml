@@ -107,7 +107,17 @@ jobs:
         run: npm ci
 
       - name: Start local Supabase
-        run: npx supabase start
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if npx supabase start; then
+              exit 0
+            fi
+            npx supabase stop --no-backup 2>/dev/null || true
+            sleep "$((attempt * 5))"
+          done
+          echo "::error::supabase start failed after retries"
+          exit 1
 
       - name: Check Postgres major matches config.toml
         run: bash scripts/assert-postgres-major.sh
