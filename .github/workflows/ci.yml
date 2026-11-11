@@ -36,9 +36,29 @@ jobs:
           cache: npm
 
       - name: Setup Deno
+        id: setup-deno
         uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
+        continue-on-error: true
         with:
           deno-version: v2.x
+
+      - name: Setup Deno (install fallback)
+        if: steps.setup-deno.outcome == 'failure'
+        run: |
+          set -euo pipefail
+          export DENO_INSTALL="$HOME/.deno"
+          for attempt in 1 2 3 4 5; do
+            if curl -fsSL --retry 5 --retry-all-errors --retry-delay 5 \
+              https://deno.land/install.sh | sh -s v2.1.4; then
+              echo "$DENO_INSTALL/bin" >> "$GITHUB_PATH"
+              "$DENO_INSTALL/bin/deno" --version
+              exit 0
+            fi
+            echo "Deno install attempt $attempt failed; backing off"
+            sleep $((attempt * 4))
+          done
+          echo "::error::Deno install failed after setup-deno and curl retries"
+          exit 1
 
       - name: Install
         run: npm ci

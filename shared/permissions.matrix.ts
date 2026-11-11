@@ -53,7 +53,7 @@ const ACCESS: {
     stores: { select: "allow", insert: "allow", update: "allow", delete: "allow" },
     sales: { select: "allow", insert: "allow", update: "allow", delete: "deny" },
     sale_items: { select: "allow", insert: "allow", update: "deny", delete: "deny" },
-    stock_movements: { select: "allow", insert: "allow", update: "deny", delete: "deny" },
+    stock_movements: { select: "allow", insert: "deny", update: "deny", delete: "deny" },
   },
   manager: {
     profiles: { select: "allow", insert: "deny", update: "allow", delete: "deny" },
@@ -63,7 +63,7 @@ const ACCESS: {
     stores: { select: "allow", insert: "allow", update: "allow", delete: "deny" },
     sales: { select: "allow", insert: "allow", update: "allow", delete: "deny" },
     sale_items: { select: "allow", insert: "allow", update: "deny", delete: "deny" },
-    stock_movements: { select: "allow", insert: "allow", update: "deny", delete: "deny" },
+    stock_movements: { select: "allow", insert: "deny", update: "deny", delete: "deny" },
   },
   cashier: {
     profiles: { select: "allow", insert: "deny", update: "allow", delete: "deny" },
@@ -73,7 +73,7 @@ const ACCESS: {
     stores: { select: "allow", insert: "deny", update: "deny", delete: "deny" },
     sales: { select: "allow", insert: "allow", update: "deny", delete: "deny" },
     sale_items: { select: "allow", insert: "allow", update: "deny", delete: "deny" },
-    stock_movements: { select: "allow", insert: "allow", update: "deny", delete: "deny" },
+    stock_movements: { select: "allow", insert: "deny", update: "deny", delete: "deny" },
   },
 };
 
@@ -91,7 +91,7 @@ export const PERMISSION_SCOPE_NOTES: Readonly<Record<TableName, string>> = {
   sale_items:
     "A line can be inserted only on an open sale whose cashier is the signed-in staff member. Completed and voided sales reject new lines, line edits, line deletes, and moving a line to another sale. Corrections are a void plus a new sale. commit_sale inserts lines during its own transaction.",
   stock_movements:
-    "Append-only stock deltas from committed sales. Direct inserts follow the same staff roles as sale_items; routine commits happen inside commit_sale.",
+    "Append-only stock deltas from committed sales. Staff cannot insert rows directly; commit_sale writes them as SECURITY DEFINER.",
 };
 
 function flatten(): readonly PermissionRow[] {
