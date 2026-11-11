@@ -36,7 +36,7 @@ jobs:
           cache: npm
 
       - name: Cache Deno
-        uses: actions/cache@5e3c90762f5c286aab12687a5736fd253c1f8078 # v5.0.3
+        uses: actions/cache@6849e6472947ad7f23a9ea52354147b286a1c4ead # v4.2.2
         with:
           path: ~/.deno
           key: deno-v2-${{ runner.os }}-${{ hashFiles('.github/workflows/ci.yml') }}

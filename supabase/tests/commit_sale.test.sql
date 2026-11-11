@@ -451,6 +451,8 @@ select throws_ok(
   'anon cannot commit a sale'
 );
 
+set local role authenticated;
+
 select set_config(
   'request.jwt.claims',
   json_build_object('sub', (select cashier_id::text from commit_fixture), 'role', 'service_role')::text,
