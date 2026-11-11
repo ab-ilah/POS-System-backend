@@ -45,7 +45,9 @@ counts() {
     (select count(*) from public.product_variants)::text || ' ' ||
     (select count(*) from public.customers)::text || ' ' ||
     (select count(*) from public.sales)::text || ' ' ||
-    (select count(*) from public.sale_items)::text"
+    (select count(*) from public.sale_items)::text || ' ' ||
+    (select count(*) from public.stores)::text || ' ' ||
+    (select count(*) from public.stock_movements)::text"
 }
 
 assert_counts() {
@@ -178,6 +180,9 @@ drop table if exists
   public.products,
   public.profiles
 cascade;
+drop function if exists public.commit_sale(uuid, uuid, jsonb) cascade;
+drop function if exists private.commit_sale_payload_matches(uuid, uuid, jsonb) cascade;
+drop function if exists private.stock_qty_apply_for_commit(uuid, integer) cascade;
 drop function if exists public.assign_staff_role(uuid, public.app_role);
 drop type if exists public.app_role cascade;
 SQL
