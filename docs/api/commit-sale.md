@@ -21,7 +21,7 @@ set search_path = ''
 { "sale_id": "<uuid>", "replayed": false }
 ```
 
-On idempotency replay, `replayed` is `true` and the function performs no writes.
+On idempotency replay with the same store and lines, `replayed` is `true` and the function performs no writes. A second call with the same key but a different store or line payload raises `P0004` / `idempotency_key_reuse`.
 
 ## Arguments
 
@@ -34,9 +34,9 @@ On idempotency replay, `replayed` is `true` and the function performs no writes.
 ## Behaviour
 
 1. **Staff only** — `auth.role()` and JWT `role` must be `authenticated`, with `app_metadata.role` in `owner` / `manager` / `cashier`. `anon` and `service_role` are rejected (`42501`). The function runs as **SECURITY DEFINER** and enforces the same rules RLS would (store exists, active catalog variant, `cashier_id = auth.uid()`).
-2. **Idempotency** — Transaction-scoped advisory lock on the key. An existing `sales` row with that id returns the replay payload with no extra lines, stock moves, or stock changes.
+2. **Idempotency** — Transaction-scoped advisory lock on the key. An existing `sales` row with the same store and `sale_items` snapshot returns the replay payload with no extra lines, stock moves, or stock changes. A payload mismatch raises `P0004`.
 3. **One transaction** — Insert `open` sale, `sale_items`, `stock_movements`, decrement `product_variants.stock_qty` (via `private.stock_qty_apply_for_commit`), then set `completed`. Any failure rolls back everything.
-4. **Stock** — Variants are locked `FOR UPDATE` in a deterministic `variant_id` order. Sales that would drive stock below zero raise `PSTCK` / `insufficient stock`.
+4. **Stock** — Variants are locked `FOR UPDATE` in a deterministic `variant_id` order. Required quantities are summed per `variant_id` across all lines before the stock check. Sales that would drive stock below zero raise `PSTCK` / `insufficient stock`.
 5. **Pricing** — Each line’s `unit_price_pesewas` must match the current shelf `price_pesewas`. Header `total_pesewas` is computed as `sum(quantity * unit_price_pesewas)`; tendered equals total with zero change and no credit on commit.
 6. **Triggers** — Inserts lines on an `open` sale, then completes through the existing sale update rules.
 
@@ -53,5 +53,5 @@ On idempotency replay, `replayed` is `true` and the function performs no writes.
 | `PSTCK` | Insufficient stock. |
 | `P0002` | Unknown store or variant. |
 | `P0003` | Unit price does not match shelf price. |
-| `P0004` | Invalid or empty lines payload. |
+| `P0004` | Invalid or empty lines payload; or `idempotency_key_reuse` when the key exists with a different store/lines payload. |
 | `P0005` | Duplicate line id in one call. |

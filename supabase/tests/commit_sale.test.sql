@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set search_path = extensions, public, pg_temp;
 
-select plan(20);
+select plan(25);
 
 create temporary table commit_fixture as
 select
@@ -94,6 +94,63 @@ select throws_ok(
   'a completed sale rejects a new sale_item'
 );
 
+reset role;
+
+insert into public.stores (id, name)
+values ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbc'::uuid, 'Second shop');
+
+select set_config(
+  'request.jwt.claims',
+  (select json_build_object('sub', cashier_id, 'role', 'authenticated')::text from commit_fixture),
+  true
+);
+select set_config(
+  'request.jwt.claim.sub',
+  (select cashier_id::text from commit_fixture),
+  true
+);
+set local role authenticated;
+
+select throws_ok(
+  $$
+    select public.commit_sale(
+      'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'::uuid,
+      'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbc'::uuid,
+      jsonb_build_array(
+        jsonb_build_object(
+          'id', 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+          'variant_id', (select stocked_variant_id from commit_fixture),
+          'quantity', 2,
+          'unit_price_pesewas', (select shelf_price from commit_fixture)
+        )
+      )
+    )
+  $$,
+  'P0004',
+  'idempotency_key_reuse',
+  'mismatched store on replay is rejected'
+);
+
+select throws_ok(
+  $$
+    select public.commit_sale(
+      'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'::uuid,
+      (select store_id from commit_fixture),
+      jsonb_build_array(
+        jsonb_build_object(
+          'id', 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+          'variant_id', (select stocked_variant_id from commit_fixture),
+          'quantity', 3,
+          'unit_price_pesewas', (select shelf_price from commit_fixture)
+        )
+      )
+    )
+  $$,
+  'P0004',
+  'idempotency_key_reuse',
+  'mismatched line quantity on replay is rejected'
+);
+
 select results_eq(
   $$
     select (public.commit_sale(
@@ -149,6 +206,60 @@ select is(
   ),
   (select stock_before - 2 from commit_fixture),
   'replay did not change stock again'
+);
+
+select throws_ok(
+  $$
+    select public.commit_sale(
+      '2a2a2a2a-2a2a-42a2-82a2-2a2a2a2a2a2a'::uuid,
+      (select store_id from commit_fixture),
+      jsonb_build_array(
+        jsonb_build_object(
+          'id', '2b2b2b2b-2b2b-42b2-82b2-2b2b2b2b2b2b',
+          'variant_id', (
+            select id from public.product_variants where stock_qty = 6 order by sku limit 1
+          ),
+          'quantity', 4,
+          'unit_price_pesewas', (
+            select price_pesewas from public.product_variants where stock_qty = 6 order by sku limit 1
+          )
+        ),
+        jsonb_build_object(
+          'id', '2c2c2c2c-2c2c-42c2-82c2-2c2c2c2c2c2c',
+          'variant_id', (
+            select id from public.product_variants where stock_qty = 6 order by sku limit 1
+          ),
+          'quantity', 3,
+          'unit_price_pesewas', (
+            select price_pesewas from public.product_variants where stock_qty = 6 order by sku limit 1
+          )
+        )
+      )
+    )
+  $$,
+  'PSTCK',
+  'insufficient stock',
+  'repeated variant lines aggregate qty before stock check'
+);
+
+select throws_ok(
+  $$
+    insert into public.stock_movements (
+      sale_id,
+      sale_item_id,
+      variant_id,
+      qty_delta
+    )
+    values (
+      'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'::uuid,
+      'cccccccc-cccc-4ccc-8ccc-cccccccccccc'::uuid,
+      (select stocked_variant_id from commit_fixture),
+      -1
+    )
+  $$,
+  '42501',
+  NULL,
+  'authenticated cannot insert stock_movements directly'
 );
 
 select throws_ok(
@@ -346,6 +457,11 @@ select set_config(
   true
 );
 set local role service_role;
+
+select skip(
+  1,
+  'concurrent replay needs a second DB session (dblink); unique_violation path is covered above'
+);
 
 select throws_ok(
   $$
