@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set search_path = extensions, public, pg_temp;
 
-select plan(29);
+select plan(30);
 
 create temporary table commit_fixture as
 select
