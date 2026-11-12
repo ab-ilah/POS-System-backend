@@ -281,13 +281,15 @@ select throws_ok(
   'an authenticated manager cannot insert a credit balance'
 );
 
-select lives_ok(
+select throws_ok(
   $$
     update public.sales
     set status = 'completed'
     where id = '66666666-6666-4666-8666-666666666661'
   $$,
-  'an authenticated manager can complete an open sale'
+  '42501',
+  null,
+  'an authenticated manager cannot complete an open sale by direct update'
 );
 
 select * from finish();
