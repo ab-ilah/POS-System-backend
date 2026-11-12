@@ -104,7 +104,7 @@ describe.skipIf(!runCommitSaleApi)("commit_sale via Supabase JS", () => {
       p_lines: lines,
     });
     expect(error).toBeNull();
-    expect(data).toEqual({ sale_id: saleId, replayed: false });
+    expect(data).toEqual({ sale_id: saleId, replayed: false, status: "completed" });
 
     const { data: sale, error: saleError } = await cashierClient
       .from("sales")
@@ -150,6 +150,56 @@ describe.skipIf(!runCommitSaleApi)("commit_sale via Supabase JS", () => {
     expect(mismatch.error).not.toBeNull();
     expect(mismatch.error?.code).toBe("P0004");
     expect(mismatch.error?.message).toContain("idempotency_key_conflict");
+  });
+
+  it("two concurrent same-key calls yield one sale and one replay", async () => {
+    const variant = await stockedVariant(cashierClient);
+    const saleId = randomUUID();
+    const lineId = randomUUID();
+    const lines = [linePayload(variant, 1, lineId)];
+
+    const [first, second] = await Promise.all([
+      cashierClient.rpc("commit_sale", {
+        p_idempotency_key: saleId,
+        p_store_id: DEFAULT_STORE_ID,
+        p_lines: lines,
+      }),
+      cashierClient.rpc("commit_sale", {
+        p_idempotency_key: saleId,
+        p_store_id: DEFAULT_STORE_ID,
+        p_lines: lines,
+      }),
+    ]);
+
+    expect(first.error).toBeNull();
+    expect(second.error).toBeNull();
+
+    const results = [first.data, second.data] as Array<{
+      sale_id: string;
+      replayed: boolean;
+      status?: string;
+    }>;
+    expect(results.filter((row) => row.replayed === true)).toHaveLength(1);
+    expect(results.filter((row) => row.replayed === false)).toHaveLength(1);
+    expect(results.every((row) => row.sale_id === saleId)).toBe(true);
+
+    const { count: saleCount } = await cashierClient
+      .from("sales")
+      .select("id", { count: "exact", head: true })
+      .eq("id", saleId);
+    expect(saleCount).toBe(1);
+
+    const { count: itemCount } = await cashierClient
+      .from("sale_items")
+      .select("id", { count: "exact", head: true })
+      .eq("sale_id", saleId);
+    expect(itemCount).toBe(1);
+
+    const { count: moveCount } = await cashierClient
+      .from("stock_movements")
+      .select("id", { count: "exact", head: true })
+      .eq("sale_id", saleId);
+    expect(moveCount).toBe(1);
   });
 
   it("returns PSTCK with variant_id in details", async () => {

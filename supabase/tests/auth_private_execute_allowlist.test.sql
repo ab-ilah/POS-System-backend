@@ -3,9 +3,9 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set search_path = extensions, public, pg_temp;
 
-select plan(9);
+select plan(11);
 
--- Allowlist reasons: migration 20261112190000_pos_auth_hardening_b.sql (re-grant block).
+-- Allowlist reasons: migration 20261112200000_pos_auth_hardening_e.sql (re-grant block).
 
 select is_empty(
   $$
@@ -38,9 +38,15 @@ select is(
 );
 
 select is(
-  has_function_privilege('authenticated', 'private.set_commit_sale_completing()', 'execute'),
+  has_function_privilege('authenticated', 'private.session_staff_app_role()', 'execute'),
   false,
-  'authenticated cannot execute set_commit_sale_completing'
+  'authenticated cannot execute session_staff_app_role'
+);
+
+select is(
+  has_function_privilege('authenticated', 'private.touch_updated_at()', 'execute'),
+  false,
+  'authenticated cannot execute touch_updated_at'
 );
 
 select bag_eq(
@@ -56,14 +62,9 @@ select bag_eq(
     values
       ('private.caller_may_update_profile(uuid)'::text),
       ('private.current_app_role()'::text),
-      ('private.enforce_credit_balance_owner()'::text),
-      ('private.enforce_sale_item_open_sale()'::text),
-      ('private.enforce_sale_update()'::text),
       ('private.session_is_authenticated_staff()'::text),
       ('private.session_is_trusted_db()'::text),
-      ('private.session_staff_app_role()'::text),
       ('private.target_is_owner(uuid)'::text),
-      ('private.touch_updated_at()'::text),
       ('private.write_staff_role(uuid,app_role)'::text)
     order by 1
   $$,
@@ -92,6 +93,12 @@ select is(
   has_function_privilege('service_role', 'public.consume_staff_invite_slot(uuid)', 'execute'),
   true,
   'consume_staff_invite_slot granted to service_role'
+);
+
+select is(
+  has_function_privilege('service_role', 'public.assign_staff_role(uuid,public.app_role)', 'execute'),
+  false,
+  'assign_staff_role is not granted to service_role'
 );
 
 select * from finish();

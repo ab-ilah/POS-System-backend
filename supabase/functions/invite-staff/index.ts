@@ -1,7 +1,17 @@
+/**
+ * invite-staff Edge Function — creates a confirmed auth user for staff onboarding.
+ * Does not send email; the operator shares credentials or reset flows out of band.
+ */
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const STAFF_ROLES = new Set(["owner", "manager", "cashier"]);
 const INVITE_ROLES_MANAGER = new Set(["cashier", "manager"]);
+
+const corsHeaders: Record<string, string> = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
 
 type InviteBody = {
   email?: string;
@@ -12,11 +22,18 @@ type InviteBody = {
 function jsonResponse(status: number, body: Record<string, unknown>): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { "content-type": "application/json; charset=utf-8" },
+    headers: {
+      ...corsHeaders,
+      "content-type": "application/json; charset=utf-8",
+    },
   });
 }
 
 Deno.serve(async (request: Request): Promise<Response> => {
+  if (request.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers: corsHeaders });
+  }
+
   if (request.method !== "POST") {
     return jsonResponse(405, { error: "method_not_allowed" });
   }
@@ -86,17 +103,11 @@ Deno.serve(async (request: Request): Promise<Response> => {
   const { data: created, error: createError } = await adminClient.auth.admin.createUser({
     email,
     email_confirm: true,
+    app_metadata: { role },
     user_metadata: { full_name: fullName },
   });
   if (createError || !created.user) {
     return jsonResponse(400, { error: "invite_failed" });
-  }
-
-  const { error: metaError } = await adminClient.auth.admin.updateUserById(created.user.id, {
-    app_metadata: { role },
-  });
-  if (metaError) {
-    return jsonResponse(500, { error: "invite_failed" });
   }
 
   return jsonResponse(201, { invited: true });

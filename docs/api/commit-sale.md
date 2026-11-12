@@ -18,10 +18,10 @@ set search_path = ''
 ## Return value
 
 ```json
-{ "sale_id": "<uuid>", "replayed": false }
+{ "sale_id": "<uuid>", "replayed": false, "status": "completed" }
 ```
 
-On idempotency replay with the same store and lines and the same cashier (`sales.cashier_id = auth.uid()`), `replayed` is `true` and the function performs no writes. A second call with the same key but a different store, line payload, or cashier raises `P0004` / `idempotency_key_conflict`. Validation (non-empty lines, store, and line shape) runs before any idempotency lookup, so some errors do not reveal whether an id is already taken.
+On idempotency replay with the same store and lines and the same cashier (`sales.cashier_id = auth.uid()`), `replayed` is `true`, `status` reflects the stored sale (`completed`, `voided`, etc.), and the function performs no writes. Replay is resolved before catalog/stock/price checks so a prior commit still replays after stock or shelf drift. A second call with the same key but a different store, line payload, or cashier raises `P0004` / `idempotency_key_conflict`. Validation (non-empty lines, store, and line shape) runs before any idempotency lookup, so some errors do not reveal whether an id is already taken.
 
 ## Arguments
 

@@ -146,8 +146,8 @@ select
   100, 100, 100, 0, 0
 from fx;
 
-insert into private.sale_completion_tokens (sale_id, txid)
-values ('c4c4c4c4-c4c4-44c4-84c4-c4c4c4c4c4c4'::uuid, 0);
+insert into private.sale_completion_tokens (sale_id, xact_id)
+values ('c4c4c4c4-c4c4-44c4-84c4-c4c4c4c4c4c4'::uuid, '1'::xid8);
 
 select set_config(
   'request.jwt.claims',
@@ -168,7 +168,7 @@ select throws_ok(
   $$,
   '42501',
   null,
-  'stale txid token does not unlock completion'
+  'stale xact token does not unlock completion'
 );
 
 select * from finish();

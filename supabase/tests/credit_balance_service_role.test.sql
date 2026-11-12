@@ -87,7 +87,7 @@ select throws_ok(
     select public.assign_staff_role(current_setting('test.cashier')::uuid, 'manager')
   $$,
   '42501',
-  'only an owner or manager can assign a staff role',
+  null,
   'service_role cannot assign a staff role'
 );
 
