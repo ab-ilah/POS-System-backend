@@ -262,11 +262,12 @@ begin
   then
     null;
   elsif coalesce(pg_catalog.current_setting('private.commit_sale_completing', true), '') = '1' then
-    if
-      current_user = 'authenticated'
-      and (select auth.role()) = 'authenticated'
-      and coalesce((select auth.jwt() ->> 'role'), '') = 'authenticated'
-      and private.session_staff_app_role() in (
+    -- commit_sale sets this flag; the trigger runs as postgres (INVOKER) inside that definer RPC.
+    if coalesce((select auth.jwt() ->> 'role'), '') is distinct from 'authenticated' then
+      raise exception 'only an owner or manager can update a sale'
+        using errcode = '42501';
+    elsif
+      private.session_staff_app_role() in (
         'owner'::public.app_role,
         'manager'::public.app_role,
         'cashier'::public.app_role

@@ -64,7 +64,8 @@ describe("permission matrix", () => {
     expect(cashier("products", "insert")).toBe("deny");
     expect(cashier("products", "update")).toBe("deny");
     expect(cashier("products", "delete")).toBe("deny");
-    expect(cashier("sales", "insert")).toBe("allow");
+    expect(cashier("sales", "insert")).toBe("deny");
+    expect(cashier("sale_items", "insert")).toBe("deny");
     expect(cashier("sales", "update")).toBe("deny");
     expect(cashier("sales", "delete")).toBe("deny");
     expect(cashier("sale_items", "update")).toBe("deny");
