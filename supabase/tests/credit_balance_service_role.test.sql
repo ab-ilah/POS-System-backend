@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set search_path = extensions, public, pg_temp;
 
-select plan(12);
+select plan(18);
 
 select set_config('test.owner', (select id::text from auth.users where email = 'owner@example.com'), true);
 select set_config('test.manager', (select id::text from auth.users where email = 'manager@example.com'), true);
@@ -102,6 +102,70 @@ select throws_ok(
   'service_role cannot change a sale status'
 );
 
+select set_config(
+  'request.jwt.claims',
+  json_build_object('sub', current_setting('test.cashier'), 'role', 'authenticated')::text,
+  true
+);
+select set_config('request.jwt.claim.sub', current_setting('test.cashier'), true);
+select set_config('request.jwt.claim.role', 'authenticated', true);
+set local role service_role;
+
+select throws_ok(
+  $$
+    update public.sales
+    set status = 'completed'
+    where id = '66666666-6666-4666-8666-666666666661'
+  $$,
+  '42501',
+  'only an owner or manager can update a sale',
+  'service_role with forged authenticated cashier jwt cannot complete a sale by direct update'
+);
+
+select throws_ok(
+  $$
+    select public.commit_sale(
+      '77777777-7777-4777-8777-777777777771'::uuid,
+      'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'::uuid,
+      jsonb_build_array(
+        jsonb_build_object(
+          'id', '77777777-7777-4777-8777-777777777772',
+          'variant_id', (
+            select v.id
+            from public.product_variants as v
+            where v.stock_qty >= 1
+            order by v.sku
+            limit 1
+          ),
+          'quantity', 1,
+          'unit_price_pesewas', (
+            select v.price_pesewas
+            from public.product_variants as v
+            where v.stock_qty >= 1
+            order by v.sku
+            limit 1
+          )
+        )
+      )
+    )
+  $$,
+  '42501',
+  NULL,
+  'service_role cannot commit_sale with forged authenticated cashier jwt'
+);
+
+select is(
+  (select status from public.sales where id = '66666666-6666-4666-8666-666666666661'),
+  'open',
+  'forged jwt commit_sale did not complete the probe sale'
+);
+
+select is(
+  (select count(*)::int from public.sales where id = '77777777-7777-4777-8777-777777777771'::uuid),
+  0,
+  'forged jwt commit_sale did not create a sale header'
+);
+
 reset role;
 select set_config('app.seed', 'off', true);
 
@@ -137,6 +201,42 @@ select set_config(
 );
 select set_config('request.jwt.claim.sub', current_setting('test.cashier'), true);
 set local role authenticated;
+
+select lives_ok(
+  $$
+    select public.commit_sale(
+      '88888888-8888-4888-8888-888888888881'::uuid,
+      'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'::uuid,
+      jsonb_build_array(
+        jsonb_build_object(
+          'id', '88888888-8888-4888-8888-888888888882',
+          'variant_id', (
+            select v.id
+            from public.product_variants as v
+            where v.stock_qty >= 1
+            order by v.sku
+            limit 1
+          ),
+          'quantity', 1,
+          'unit_price_pesewas', (
+            select v.price_pesewas
+            from public.product_variants as v
+            where v.stock_qty >= 1
+            order by v.sku
+            limit 1
+          )
+        )
+      )
+    )
+  $$,
+  'a legitimate authenticated cashier commit_sale succeeds'
+);
+
+select is(
+  (select status from public.sales where id = '88888888-8888-4888-8888-888888888881'::uuid),
+  'completed',
+  'legitimate cashier commit_sale leaves the sale completed'
+);
 
 select throws_ok(
   $$
