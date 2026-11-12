@@ -3,9 +3,7 @@
  * Does not send email; the operator shares credentials or reset flows out of band.
  */
 import { createClient } from "jsr:@supabase/supabase-js@2";
-
-const STAFF_ROLES = new Set(["owner", "manager", "cashier"]);
-const INVITE_ROLES_MANAGER = new Set(["cashier", "manager"]);
+import { isInvitableStaffRole } from "./roles.ts";
 
 const corsHeaders: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
@@ -60,8 +58,11 @@ Deno.serve(async (request: Request): Promise<Response> => {
   const email = payload.email?.trim().toLowerCase() ?? "";
   const fullName = payload.full_name?.trim() ?? "";
   const role = payload.role?.trim() ?? "";
-  if (!email || !fullName || !STAFF_ROLES.has(role)) {
+  if (!email || !fullName) {
     return jsonResponse(400, { error: "invalid_invite" });
+  }
+  if (!isInvitableStaffRole(role)) {
+    return jsonResponse(400, { error: "invalid_role" });
   }
 
   const callerClient = createClient(supabaseUrl, anonKey, {
@@ -76,10 +77,6 @@ Deno.serve(async (request: Request): Promise<Response> => {
   if (callerRole !== "owner" && callerRole !== "manager") {
     return jsonResponse(403, { error: "forbidden" });
   }
-  if (callerRole === "manager" && !INVITE_ROLES_MANAGER.has(role)) {
-    return jsonResponse(403, { error: "forbidden" });
-  }
-
   const {
     data: { user: caller },
     error: userError,

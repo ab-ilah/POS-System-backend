@@ -92,7 +92,7 @@ select throws_ok(
     where sale_id in (select id from public.sales where status = 'completed')
   $$,
   '42501',
-  'cannot change lines on a finished sale',
+  null,
   'service_role cannot delete a line from a finished sale'
 );
 
@@ -103,25 +103,29 @@ select throws_ok(
     where id = '77777777-7777-4777-8777-777777777782'
   $$,
   '42501',
-  'cannot change lines on a finished sale',
+  null,
   'service_role cannot move a line off a voided sale'
 );
 
-select lives_ok(
+select throws_ok(
   $$
     update public.sale_items
     set sale_id = '77777777-7777-4777-8777-777777777773'
     where id = '77777777-7777-4777-8777-777777777781'
   $$,
-  'service_role can move a line between two open sales'
+  '42501',
+  null,
+  'service_role cannot update sale_items'
 );
 
-select lives_ok(
+select throws_ok(
   $$
     delete from public.sale_items
     where id = '77777777-7777-4777-8777-777777777781'
   $$,
-  'service_role can delete a line from an open sale'
+  '42501',
+  null,
+  'service_role cannot delete sale_items'
 );
 
 select * from finish();

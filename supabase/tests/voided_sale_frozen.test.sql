@@ -88,7 +88,7 @@ select throws_ok(
     where id = '99999999-9999-4999-8999-999999999999'
   $$,
   '42501',
-  'a voided sale is frozen',
+  null,
   'service_role cannot update a voided sale'
 );
 

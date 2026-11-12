@@ -468,9 +468,19 @@ async function probe(role: Role, table: TableName, operation: Operation): Promis
       }
     }
     if (operation === "update") {
-      return verdict(await updateProbe(tx, role, table));
+      try {
+        return verdict(await updateProbe(tx, role, table));
+      } catch (error) {
+        if (isDeny(error)) return "deny";
+        throw error;
+      }
     }
-    return verdict(await deleteProbe(tx, table));
+    try {
+      return verdict(await deleteProbe(tx, table));
+    } catch (error) {
+      if (isDeny(error)) return "deny";
+      throw error;
+    }
   });
 }
 
