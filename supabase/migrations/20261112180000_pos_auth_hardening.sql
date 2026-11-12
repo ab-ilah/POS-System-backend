@@ -257,6 +257,7 @@ begin
     null;
   elsif
     coalesce(pg_catalog.current_setting('private.commit_sale_completing', true), '') = '1'
+    and current_user = 'authenticated'
     and (select auth.role()) = 'authenticated'
     and coalesce((select auth.jwt() ->> 'role'), '') = 'authenticated'
     and old.status = 'open'

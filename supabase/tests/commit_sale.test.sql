@@ -435,6 +435,11 @@ select set_config(
    from auth.users where email = 'manager@example.com'),
   true
 );
+select set_config(
+  'request.jwt.claim.sub',
+  (select id::text from auth.users where email = 'manager@example.com'),
+  true
+);
 set local role authenticated;
 
 select throws_ok(
