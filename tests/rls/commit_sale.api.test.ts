@@ -145,7 +145,7 @@ describe.skipIf(!runCommitSaleApi)("commit_sale via Supabase JS", () => {
     });
     expect(mismatch.error).not.toBeNull();
     expect(mismatch.error?.code).toBe("P0004");
-    expect(mismatch.error?.message).toContain("idempotency_key_reuse");
+    expect(mismatch.error?.message).toContain("idempotency_key_conflict");
   });
 
   it("returns PSTCK with variant_id in details", async () => {

@@ -66,8 +66,10 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
-      - name: Typecheck edge function
-        run: deno check supabase/functions/health/index.ts
+      - name: Typecheck edge functions
+        run: |
+          deno check supabase/functions/health/index.ts
+          deno check supabase/functions/invite-staff/index.ts
 
       - name: Lint
         run: npm run lint
@@ -159,9 +161,11 @@ jobs:
           source <(npx supabase status -o env)
           set +a
           export RUN_COMMIT_SALE_API=1
+          export RUN_AUTH_SIGNUP_CHECK=1
           export SUPABASE_URL="${API_URL}"
           export SUPABASE_ANON_KEY="${ANON_KEY}"
           npm run test:commit-sale-api
+          npx vitest run tests/auth-signup-disabled.test.ts
 
       - name: Restore drill
         run: bash scripts/restore-drill.sh

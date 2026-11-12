@@ -11,7 +11,8 @@
     "seed:generate": "tsx supabase/seed/generate.ts",
     "secrets:scan": "tsx scripts/scan-secrets.ts",
     "keepalive": "tsx scripts/keepalive.ts",
-    "auth:disable-signup": "tsx scripts/disable-hosted-signup.ts"
+    "auth:disable-signup": "tsx scripts/disable-hosted-signup.ts",
+    "auth:assert-signup": "tsx scripts/assert-hosted-signup.ts"
   },
   "repository": {
     "type": "git",

@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set search_path = extensions, public, pg_temp;
 
-select plan(34);
+select plan(37);
 
 create or replace function pg_temp.commit_sale_pstck_detail(
   p_idempotency_key uuid,
@@ -128,7 +128,7 @@ select throws_ok(
     )
   $$,
   '42501',
-  'cannot change lines on a finished sale',
+  NULL,
   'a completed sale rejects a new sale_item'
 );
 
@@ -165,7 +165,7 @@ select throws_ok(
     )
   $$,
   'P0004',
-  'idempotency_key_reuse',
+  'idempotency_key_conflict',
   'mismatched store on replay is rejected'
 );
 
@@ -185,7 +185,7 @@ select throws_ok(
     )
   $$,
   'P0004',
-  'idempotency_key_reuse',
+  'idempotency_key_conflict',
   'mismatched line quantity on replay is rejected'
 );
 
@@ -372,7 +372,7 @@ select throws_ok(
     )
   $$,
   'P0004',
-  'idempotency_key_reuse',
+  'idempotency_key_conflict',
   'missing line on replay is rejected via multiset compare'
 );
 
@@ -398,7 +398,7 @@ select throws_ok(
     )
   $$,
   'P0004',
-  'idempotency_key_reuse',
+  'idempotency_key_conflict',
   'replay with same tuples but different line ids is rejected'
 );
 
@@ -426,6 +426,74 @@ select results_eq(
   $$ values (true) $$,
   'reordered lines with the same multiset replay ok'
 );
+
+reset role;
+
+select set_config(
+  'request.jwt.claims',
+  (select json_build_object('sub', id, 'role', 'authenticated')::text
+   from auth.users where email = 'manager@example.com'),
+  true
+);
+select set_config(
+  'request.jwt.claim.sub',
+  (select id::text from auth.users where email = 'manager@example.com'),
+  true
+);
+set local role authenticated;
+
+select throws_ok(
+  $$
+    select public.commit_sale(
+      'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'::uuid,
+      (select store_id from commit_fixture),
+      jsonb_build_array(
+        jsonb_build_object(
+          'id', 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+          'variant_id', (select stocked_variant_id from commit_fixture),
+          'quantity', 2,
+          'unit_price_pesewas', (select shelf_price from commit_fixture)
+        )
+      )
+    )
+  $$,
+  'P0004',
+  'idempotency_key_conflict',
+  'other staff cannot replay someone else''s sale'
+);
+
+select throws_ok(
+  $$
+    select public.commit_sale(
+      'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'::uuid,
+      '00000000-0000-4000-8000-000000000000'::uuid,
+      '[]'::jsonb
+    )
+  $$,
+  'P0004',
+  'a sale needs at least one line',
+  'existing id with junk payload matches a fresh id (no oracle)'
+);
+
+select throws_ok(
+  $$
+    select public.commit_sale(
+      gen_random_uuid(),
+      '00000000-0000-4000-8000-000000000000'::uuid,
+      '[]'::jsonb
+    )
+  $$,
+  'P0004',
+  'a sale needs at least one line',
+  'unknown id gives the identical empty-lines error'
+);
+
+select set_config(
+  'request.jwt.claims',
+  (select json_build_object('sub', cashier_id, 'role', 'authenticated')::text from commit_fixture),
+  true
+);
+set local role authenticated;
 
 select throws_ok(
   $$

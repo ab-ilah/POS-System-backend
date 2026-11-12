@@ -7,6 +7,7 @@ name: Keepalive
 on:
   schedule:
     - cron: "15 6 * * *"
+    - cron: "20 6 * * 1"
   workflow_dispatch:
 
 permissions:
@@ -60,3 +61,59 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.PROD_DB_URL }}
         run: npm run keepalive
+
+  assert-signup-staging:
+    name: assert-signup-staging
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'workflow_dispatch' ||
+        github.event.schedule == '20 6 * * 1')
+    runs-on: ubuntu-latest
+    environment: staging
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Assert hosted signup disabled on staging
+        env:
+          SUPABASE_AUTH_CONFIG_READ_TOKEN: ${{ secrets.SUPABASE_AUTH_CONFIG_READ_TOKEN }}
+          SUPABASE_PROJECT_REF: hnbvmxebzaocdttlteib
+        run: npm run auth:assert-signup
+
+  assert-signup-production:
+    name: assert-signup-production
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'workflow_dispatch' ||
+        github.event.schedule == '20 6 * * 1')
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Assert hosted signup disabled on production
+        env:
+          SUPABASE_AUTH_CONFIG_READ_TOKEN: ${{ secrets.SUPABASE_AUTH_CONFIG_READ_TOKEN }}
+          SUPABASE_PROJECT_REF: vasbjwzykqoebbtvqnjx
+        run: npm run auth:assert-signup
