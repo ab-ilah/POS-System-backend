@@ -71,17 +71,17 @@ jobs:
       - name: Install
         run: npm ci
 
-      - name: Push migrations to staging
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-          STAGING_DB_URL: ${{ secrets.STAGING_DB_URL }}
-        run: npx supabase db push --yes --remote="$STAGING_DB_URL"
-
       - name: Disable hosted signup on staging
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_PROJECT_REF: hnbvmxebzaocdttlteib
         run: npm run auth:disable-signup
+
+      - name: Push migrations to staging
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          STAGING_DB_URL: ${{ secrets.STAGING_DB_URL }}
+        run: npx supabase db push --yes --remote="$STAGING_DB_URL"
 
   deploy-production:
     name: deploy-production
@@ -108,14 +108,14 @@ jobs:
       - name: Install
         run: npm ci
 
-      - name: Push migrations to production
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-          PROD_DB_URL: ${{ secrets.PROD_DB_URL }}
-        run: npx supabase db push --yes --remote="$PROD_DB_URL"
-
       - name: Disable hosted signup on production
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_PROJECT_REF: vasbjwzykqoebbtvqnjx
         run: npm run auth:disable-signup
+
+      - name: Push migrations to production
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          PROD_DB_URL: ${{ secrets.PROD_DB_URL }}
+        run: npx supabase db push --yes --remote="$PROD_DB_URL"

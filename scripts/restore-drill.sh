@@ -185,6 +185,13 @@ drop function if exists private.commit_sale_assert_lines_payload(jsonb) cascade;
 drop function if exists private.commit_sale_payload_matches(uuid, uuid, jsonb) cascade;
 drop function if exists private.stock_qty_apply_for_commit(uuid, integer) cascade;
 drop function if exists public.assign_staff_role(uuid, public.app_role);
+drop function if exists public.my_role();
+drop function if exists private.target_is_owner(uuid);
+drop function if exists private.bootstrap_first_owner(text);
+drop table if exists private.bootstrap_state;
+drop function if exists public.consume_staff_invite_slot(uuid);
+drop table if exists private.staff_invite_buckets;
+drop function if exists private.consume_staff_invite_slot(uuid);
 drop type if exists public.app_role cascade;
 SQL
 docker exec "$container" pg_restore -l /tmp/pos-restore.dump > "$workdir/toc.list"

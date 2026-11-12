@@ -96,6 +96,8 @@ describe("workflows", () => {
     expect(keepalive).toBeDefined();
     expect(keepalive).toContain("schedule:");
     expect(keepalive).toContain('cron: "15 6 * * *"');
+    expect(keepalive).toContain('cron: "20 6 * * 1"');
+    expect(keepalive).toContain("SUPABASE_AUTH_CONFIG_READ_TOKEN");
     const ping = readFileSync("scripts/keepalive.ts", "utf8");
     expect(ping).toContain("public.products");
     expect(ping).toContain("public.customers");
@@ -104,7 +106,9 @@ describe("workflows", () => {
     expect(stagingKeepalive).toContain("github.ref == 'refs/heads/main'");
     expect(keepalive).toContain("STAGING_DB_URL");
     expect(keepalive).toContain("PROD_DB_URL");
-    const production = keepalive?.split("keepalive-production:")[1] ?? "";
+    const production = (keepalive?.split("keepalive-production:")[1] ?? "").split(
+      "assert-signup-staging:",
+    )[0] ?? "";
     expect(production).toContain("environment: prod-ops");
     expect(production).toContain("github.ref == 'refs/heads/main'");
     expect(production).not.toContain("environment: production");
