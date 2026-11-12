@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set search_path = extensions, public, pg_temp;
 
-select plan(10);
+select plan(11);
 
 -- Allowlist reasons: migration 20261112200000_pos_auth_hardening_e.sql (re-grant block).
 
@@ -43,6 +43,12 @@ select is(
   'authenticated cannot execute session_staff_app_role'
 );
 
+select is(
+  has_function_privilege('authenticated', 'private.touch_updated_at()', 'execute'),
+  false,
+  'authenticated cannot execute touch_updated_at'
+);
+
 select bag_eq(
   $$
     select p.oid::regprocedure::text
@@ -59,7 +65,6 @@ select bag_eq(
       ('private.session_is_authenticated_staff()'::text),
       ('private.session_is_trusted_db()'::text),
       ('private.target_is_owner(uuid)'::text),
-      ('private.touch_updated_at()'::text),
       ('private.write_staff_role(uuid,app_role)'::text)
     order by 1
   $$,

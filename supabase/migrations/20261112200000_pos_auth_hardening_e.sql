@@ -484,6 +484,9 @@ revoke all on function private.enforce_sale_item_open_sale() from public, anon, 
 revoke all on function private.enforce_credit_balance_owner() from public, anon, authenticated, service_role;
 revoke all on function private.session_staff_app_role() from public, anon, authenticated;
 
+comment on function private.session_staff_app_role() is
+  'Staff app role for auth.uid() (via app_role_of). EXECUTE is granted to postgres only; the commit_sale completion token path invokes it from SECURITY DEFINER callers inside enforce_sale_update.';
+
 grant execute on function private.current_app_role() to authenticated, service_role;
 grant execute on function private.target_is_owner(uuid) to authenticated;
 grant execute on function private.session_staff_app_role() to postgres;
@@ -491,7 +494,8 @@ grant execute on function private.session_is_trusted_db() to authenticated, serv
 grant execute on function private.session_is_authenticated_staff() to authenticated, service_role;
 grant execute on function private.caller_may_update_profile(uuid) to authenticated, service_role;
 grant execute on function private.write_staff_role(uuid, public.app_role) to authenticated;
-grant execute on function private.touch_updated_at() to authenticated, service_role;
+
+revoke all on function private.touch_updated_at() from public, anon, authenticated, service_role;
 
 grant execute on function public.commit_sale(uuid, uuid, jsonb) to authenticated;
 grant execute on function public.my_role() to authenticated;
