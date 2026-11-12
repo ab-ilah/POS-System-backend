@@ -173,7 +173,7 @@ jobs:
           export SUPABASE_URL="${API_URL}"
           export SUPABASE_ANON_KEY="${ANON_KEY}"
           npm run test:commit-sale-api
-          npx vitest run tests/rls/auth_email_case_insensitive.api.test.ts
+          npx vitest run --config vitest.rls.config.ts tests/rls/auth_email_case_insensitive.api.test.ts
           npx vitest run tests/auth-signup-disabled.test.ts
 
       - name: Restore drill
