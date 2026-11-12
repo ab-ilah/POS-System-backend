@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set search_path = extensions, public, pg_temp;
 
-select plan(6);
+select plan(8);
 
 create temporary table fx as
 select
@@ -158,7 +158,18 @@ select set_config(
   (select json_build_object('sub', manager_id, 'role', 'authenticated')::text from fx),
   true
 );
+select set_config(
+  'request.jwt.claim.sub',
+  (select manager_id::text from fx),
+  true
+);
 set local role authenticated;
+
+select is(
+  (select status from public.sales where id = 'e0e0e0e0-e0e0-40e0-80e0-e0e0e0e0e0e0'::uuid),
+  'completed',
+  'cashier commit_sale left the probe sale completed'
+);
 
 select throws_ok(
   $$
