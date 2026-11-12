@@ -3,7 +3,29 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set search_path = extensions, public, pg_temp;
 
-select plan(31);
+select plan(33);
+
+create or replace function pg_temp.commit_sale_pstck_detail(
+  p_idempotency_key uuid,
+  p_store_id uuid,
+  p_lines jsonb
+) returns text
+language plpgsql
+as $$
+declare
+  _detail text;
+begin
+  perform public.commit_sale(p_idempotency_key, p_store_id, p_lines);
+  return null;
+exception
+  when others then
+    if sqlstate <> 'PSTCK' then
+      raise;
+    end if;
+    get stacked diagnostics _detail = pg_exception_detail;
+    return _detail;
+end;
+$$;
 
 create temporary table commit_fixture as
 select
@@ -453,6 +475,78 @@ select is(
   (select count(*)::int from public.sales where id = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd'::uuid),
   0,
   'insufficient stock left no sale header'
+);
+
+select is(
+  pg_temp.commit_sale_pstck_detail(
+    'd1d1d1d1-d1d1-41d1-81d1-d1d1d1d1d1d1'::uuid,
+    (select store_id from commit_fixture),
+    jsonb_build_array(
+      jsonb_build_object(
+        'id', 'd2d2d2d2-d2d2-42d2-82d2-d2d2d2d2d2d2',
+        'variant_id', (select zero_stock_variant_id from commit_fixture),
+        'quantity', 1,
+        'unit_price_pesewas', (
+          select price_pesewas
+          from public.product_variants
+          where id = (select zero_stock_variant_id from commit_fixture)
+        )
+      )
+    )
+  ),
+  'variant_id=' || (select zero_stock_variant_id::text from commit_fixture),
+  'PSTCK detail names the out-of-stock variant'
+);
+
+reset role;
+
+insert into public.sales (
+  id,
+  receipt_no,
+  store_id,
+  customer_id,
+  cashier_id,
+  status,
+  subtotal_pesewas,
+  total_pesewas,
+  tendered_pesewas,
+  change_pesewas,
+  credit_applied_pesewas
+) values (
+  'c1c1c1c1-c1c1-41c1-81c1-c1c1c1c1c1c1'::uuid,
+  'OPEN-RLS-PROBE',
+  (select store_id from commit_fixture),
+  null,
+  (select cashier_id from commit_fixture),
+  'open',
+  1000,
+  1000,
+  1000,
+  0,
+  0
+);
+
+select set_config(
+  'request.jwt.claims',
+  (select json_build_object('sub', cashier_id, 'role', 'authenticated')::text from commit_fixture),
+  true
+);
+select set_config(
+  'request.jwt.claim.sub',
+  (select cashier_id::text from commit_fixture),
+  true
+);
+set local role authenticated;
+
+select throws_ok(
+  $$
+    update public.sales
+    set status = 'completed'
+    where id = 'c1c1c1c1-c1c1-41c1-81c1-c1c1c1c1c1c1'::uuid
+  $$,
+  '42501',
+  'only an owner or manager can update a sale',
+  'cashier cannot complete a sale with a direct update'
 );
 
 select throws_ok(

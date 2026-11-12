@@ -151,5 +151,17 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
         run: npm run test:rls
 
+      - name: Commit sale API integration
+        run: |
+          set -euo pipefail
+          set -a
+          # shellcheck disable=SC1091
+          source <(npx supabase status -o env)
+          set +a
+          export RUN_COMMIT_SALE_API=1
+          export SUPABASE_URL="${API_URL}"
+          export SUPABASE_ANON_KEY="${ANON_KEY}"
+          npm run test:commit-sale-api
+
       - name: Restore drill
         run: bash scripts/restore-drill.sh

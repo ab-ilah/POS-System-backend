@@ -7,6 +7,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test:rls": "RUN_RLS=1 vitest run --config vitest.rls.config.ts",
+    "test:commit-sale-api": "RUN_COMMIT_SALE_API=1 vitest run --config vitest.rls.config.ts tests/rls/commit_sale.api.test.ts",
     "seed:generate": "tsx supabase/seed/generate.ts",
     "secrets:scan": "tsx scripts/scan-secrets.ts",
     "keepalive": "tsx scripts/keepalive.ts",
@@ -29,6 +30,7 @@
     "node": ">=22"
   },
   "devDependencies": {
+    "@supabase/supabase-js": "^2.119.0",
     "@types/node": "^22.19.15",
     "eslint": "^10.14.0",
     "postgres": "^3.4.7",

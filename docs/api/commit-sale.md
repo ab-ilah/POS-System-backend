@@ -50,7 +50,7 @@ On idempotency replay with the same store and lines, `replayed` is `true` and th
 | SQLSTATE | Message |
 | --- | --- |
 | `42501` | Caller is not authenticated staff. |
-| `PSTCK` | Insufficient stock. |
+| `PSTCK` | Insufficient stock. `details` is `variant_id=<uuid>` for the variant that failed the pre-check. |
 | `P0002` | Unknown store or variant. |
 | `P0003` | Unit price does not match shelf price. |
 | `P0004` | Invalid or empty lines payload; or `idempotency_key_reuse` when the key exists with a different store/lines payload. |
