@@ -84,21 +84,14 @@ set local role authenticated;
 
 select set_config('private.commit_sale_completing', '1', true);
 
-select is(
-  (
-    update public.sales as s
-    set status = 'completed'
-    where s.id = 'c1c1c1c1-c1c1-41c1-81c1-c1c1c1c1c1c1'::uuid
-    returning 1
-  ),
-  null,
-  'cashier forged GUC cannot complete sale directly (RLS blocks update)'
-);
+update public.sales as s
+set status = 'completed'
+where s.id = 'c1c1c1c1-c1c1-41c1-81c1-c1c1c1c1c1c1'::uuid;
 
 select is(
   (select s.status from public.sales as s where s.id = 'c1c1c1c1-c1c1-41c1-81c1-c1c1c1c1c1c1'::uuid),
   'open',
-  'forged GUC probe sale stays open'
+  'cashier forged GUC cannot complete sale directly (RLS blocks update)'
 );
 
 reset role;
