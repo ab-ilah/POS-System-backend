@@ -7,11 +7,7 @@ import {
   type SeedUser,
 } from "../../supabase/seed/catalog.ts";
 
-if (process.env["RUN_COMMIT_SALE_API"] !== "1") {
-  throw new Error(
-    "RUN_COMMIT_SALE_API=1 is required. Run npm run test:commit-sale-api after supabase db reset.",
-  );
-}
+const runCommitSaleApi = process.env["RUN_COMMIT_SALE_API"] === "1";
 
 const DEFAULT_STORE_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 
@@ -20,11 +16,13 @@ const apiUrl = (process.env["SUPABASE_URL"] ?? process.env["API_URL"] ?? "http:/
   "",
 );
 
-const anonKeyFromEnv = process.env["SUPABASE_ANON_KEY"] ?? process.env["ANON_KEY"];
-if (!anonKeyFromEnv) {
-  throw new Error("SUPABASE_ANON_KEY or ANON_KEY must be set (supabase status -o env).");
+function requireAnonKey(): string {
+  const key = process.env["SUPABASE_ANON_KEY"] ?? process.env["ANON_KEY"];
+  if (!key) {
+    throw new Error("SUPABASE_ANON_KEY or ANON_KEY must be set (supabase status -o env).");
+  }
+  return key;
 }
-const anonKey: string = anonKeyFromEnv;
 
 type VariantRow = {
   id: string;
@@ -35,6 +33,7 @@ type VariantRow = {
 let cashierClient: SupabaseClient;
 
 async function signInCashier(): Promise<SupabaseClient> {
+  const anonKey = requireAnonKey();
   const cashier: SeedUser = userForRole("cashier");
   const client = createClient(apiUrl, anonKey, {
     auth: { autoRefreshToken: false, persistSession: false },
@@ -88,11 +87,10 @@ function linePayload(variant: VariantRow, quantity: number, lineId: string) {
   };
 }
 
-beforeAll(async () => {
-  cashierClient = await signInCashier();
-});
-
-describe("commit_sale via Supabase JS", () => {
+describe.skipIf(!runCommitSaleApi)("commit_sale via Supabase JS", () => {
+  beforeAll(async () => {
+    cashierClient = await signInCashier();
+  });
   it("completes a sale, writes lines, decrements stock, and replays idempotently", async () => {
     const variant = await stockedVariant(cashierClient);
     const saleId = randomUUID();
