@@ -138,6 +138,15 @@ as $$
   select pg_catalog.set_config('private.commit_sale_completing', '1', true);
 $$;
 
+create or replace function private.clear_commit_sale_completing()
+returns void
+language sql
+security definer
+set search_path = ''
+as $$
+  select pg_catalog.set_config('private.commit_sale_completing', '', true);
+$$;
+
 comment on function private.session_staff_app_role() is
   'Staff app role for the JWT subject. Granted to authenticated because enforce_sale_update is SECURITY INVOKER and runs as the API role during commit_sale completion.';
 
@@ -261,8 +270,11 @@ begin
     and private.current_app_role() in ('owner'::public.app_role, 'manager'::public.app_role)
   then
     null;
-  elsif coalesce(pg_catalog.current_setting('private.commit_sale_completing', true), '') = '1' then
-    -- commit_sale sets this flag; the trigger runs as postgres (INVOKER) inside that definer RPC.
+  elsif
+    current_user in ('postgres', 'supabase_admin')
+    and coalesce(pg_catalog.current_setting('private.commit_sale_completing', true), '') = '1'
+  then
+    -- commit_sale sets this flag as postgres; callers cannot forge it without definer execution.
     if coalesce((select auth.jwt() ->> 'role'), '') is distinct from 'authenticated' then
       raise exception 'only an owner or manager can update a sale'
         using errcode = '42501';
@@ -602,6 +614,8 @@ begin
         using errcode = 'P0006';
     end if;
 
+    perform private.clear_commit_sale_completing();
+
     return pg_catalog.jsonb_build_object(
       'sale_id', p_idempotency_key,
       'replayed', false
@@ -679,6 +693,8 @@ grant execute on function public.consume_staff_invite_slot(uuid) to service_role
 
 revoke all on function private.set_commit_sale_completing() from public, anon, authenticated, service_role;
 grant execute on function private.set_commit_sale_completing() to postgres;
+revoke all on function private.clear_commit_sale_completing() from public, anon, authenticated, service_role;
+grant execute on function private.clear_commit_sale_completing() to postgres;
 
 revoke all on function private.session_staff_app_role() from public, anon, service_role;
 grant execute on function private.session_staff_app_role() to authenticated, postgres;

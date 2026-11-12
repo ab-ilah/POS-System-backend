@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set search_path = extensions, public, pg_temp;
 
-select plan(4);
+select plan(6);
 
 create temporary table fx as
 select
@@ -62,6 +62,79 @@ select lives_ok(
     )
   $$,
   'commit_sale still works for cashiers'
+);
+
+reset role;
+
+insert into public.sales (
+  id, receipt_no, store_id, cashier_id, status,
+  subtotal_pesewas, total_pesewas, tendered_pesewas, change_pesewas, credit_applied_pesewas
+)
+select
+  'f0f0f0f0-f0f0-40f0-80f0-f0f0f0f0f0f0',
+  'GUC-PROBE',
+  store_id,
+  cashier_id,
+  'open',
+  100, 100, 100, 0, 0
+from fx;
+
+select set_config(
+  'request.jwt.claims',
+  (select json_build_object('sub', cashier_id, 'role', 'authenticated')::text from fx),
+  true
+);
+select set_config(
+  'request.jwt.claim.sub',
+  (select cashier_id::text from fx),
+  true
+);
+set local role authenticated;
+
+select set_config('private.commit_sale_completing', '1', true);
+
+create or replace function pg_temp.cashier_try_complete_with_forged_guc() returns integer
+language plpgsql
+as $$
+declare
+  rows_updated integer;
+begin
+  update public.sales
+  set status = 'completed'
+  where id = 'f0f0f0f0-f0f0-40f0-80f0-f0f0f0f0f0f0'::uuid;
+  get diagnostics rows_updated = row_count;
+  return rows_updated;
+end;
+$$;
+
+select is(
+  pg_temp.cashier_try_complete_with_forged_guc(),
+  0,
+  'forged commit_sale_completing GUC leaves direct complete at zero rows'
+);
+
+select is(
+  (select status from public.sales where id = 'f0f0f0f0-f0f0-40f0-80f0-f0f0f0f0f0f0'::uuid),
+  'open',
+  'forged GUC leaves the probe sale open'
+);
+
+select lives_ok(
+  $$
+    select public.commit_sale(
+      'f2f2f2f2-f2f2-42f2-82f2-f2f2f2f2f2f2'::uuid,
+      (select store_id from fx),
+      jsonb_build_array(
+        jsonb_build_object(
+          'id', 'f3f3f3f3-f3f3-43f3-83f3-f3f3f3f3f3f3',
+          'variant_id', (select variant_id from fx),
+          'quantity', 1,
+          'unit_price_pesewas', (select shelf_price from fx)
+        )
+      )
+    )
+  $$,
+  'commit_sale still completes after a forged GUC attempt'
 );
 
 reset role;
