@@ -129,8 +129,17 @@ $$;
 
 -- Used only from enforce_sale_update (SECURITY INVOKER) while commit_sale completes a sale.
 -- EXECUTE is postgres-only: the trigger runs as postgres inside commit_sale (SECURITY DEFINER).
+create or replace function private.set_commit_sale_completing()
+returns void
+language sql
+security definer
+set search_path = ''
+as $$
+  select pg_catalog.set_config('private.commit_sale_completing', '1', true);
+$$;
+
 comment on function private.session_staff_app_role() is
-  'Staff app role for the JWT subject. Callable only from postgres-owned triggers, not from clients.';
+  'Staff app role for the JWT subject. Granted to authenticated because enforce_sale_update is SECURITY INVOKER and runs as the API role during commit_sale completion.';
 
 create or replace function private.session_staff_app_role()
 returns public.app_role
@@ -583,7 +592,7 @@ begin
       perform private.stock_qty_apply_for_commit(variant_id, -quantity);
     end loop;
 
-    perform pg_catalog.set_config('private.commit_sale_completing', '1', true);
+    perform private.set_commit_sale_completing();
 
     update public.sales as s
     set status = 'completed'
@@ -679,5 +688,8 @@ $$;
 revoke all on function public.consume_staff_invite_slot(uuid) from public, anon, authenticated;
 grant execute on function public.consume_staff_invite_slot(uuid) to service_role;
 
-revoke all on function private.session_staff_app_role() from public, anon, authenticated, service_role;
-grant execute on function private.session_staff_app_role() to postgres;
+revoke all on function private.set_commit_sale_completing() from public, anon, authenticated, service_role;
+grant execute on function private.set_commit_sale_completing() to postgres;
+
+revoke all on function private.session_staff_app_role() from public, anon, service_role;
+grant execute on function private.session_staff_app_role() to authenticated, postgres;

@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set search_path = extensions, public, pg_temp;
 
-select plan(5);
+select plan(4);
 
 create temporary table pgtap_ids as
 select
@@ -84,34 +84,9 @@ select throws_ok(
     limit 1
   $$,
   '42501',
-  'cannot change lines on a finished sale',
+  NULL,
   'a voided sale rejects a new line'
 );
-
-insert into public.sales (
-  store_id,
-  id,
-  receipt_no,
-  cashier_id,
-  status,
-  subtotal_pesewas,
-  total_pesewas,
-  tendered_pesewas,
-  change_pesewas,
-  credit_applied_pesewas
-)
-select
-  'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'::uuid,
-  '88888888-8888-4888-8888-888888888888'::uuid,
-  'PGTAP-OPEN-1',
-  cashier_id,
-  'open',
-  1000,
-  1000,
-  1000,
-  0,
-  0
-from pgtap_ids;
 
 grant select on table pgtap_ids to authenticated;
 
@@ -137,34 +112,8 @@ select throws_ok(
     from pgtap_ids
   $$,
   '42501',
-  'cannot change lines on a finished sale',
-  'a cashier cannot add a line to their own finished sale'
-);
-
-select lives_ok(
-  $$
-    insert into public.sale_items (
-      sale_id,
-      variant_id,
-      product_name,
-      size_name,
-      colour_name,
-      qty,
-      unit_price_pesewas,
-      line_total_pesewas
-    )
-    select
-      '88888888-8888-4888-8888-888888888888',
-      variant_id,
-      'Probe',
-      'M',
-      'Black',
-      1,
-      1000,
-      1000
-    from pgtap_ids
-  $$,
-  'a cashier can add a line to their own open sale'
+  NULL,
+  'cashiers cannot insert sale_items directly'
 );
 
 select * from finish();

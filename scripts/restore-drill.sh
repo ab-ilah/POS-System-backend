@@ -192,6 +192,7 @@ drop table if exists private.bootstrap_state;
 drop function if exists public.consume_staff_invite_slot(uuid);
 drop table if exists private.staff_invite_buckets;
 drop function if exists private.consume_staff_invite_slot(uuid);
+drop function if exists private.set_commit_sale_completing();
 drop type if exists public.app_role cascade;
 SQL
 docker exec "$container" pg_restore -l /tmp/pos-restore.dump > "$workdir/toc.list"

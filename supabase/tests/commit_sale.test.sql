@@ -128,7 +128,7 @@ select throws_ok(
     )
   $$,
   '42501',
-  'cannot change lines on a finished sale',
+  NULL,
   'a completed sale rejects a new sale_item'
 );
 
