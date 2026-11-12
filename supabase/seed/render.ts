@@ -174,6 +174,9 @@ export function renderSeedSql(model: SeedModel = buildSeed()): string {
 -- Historical sales are a snapshot. They do not post again into that balance.
 -- supabase db reset applies this file as postgres with no SET ROLE. That session
 -- may set credit balances. There is no seed flag a staff or service session can turn on.
+-- Wrapped in a single transaction so completion tokens share one xact_id with the status update.
+
+begin;
 
 ${renderUsers(model)}
 
@@ -182,5 +185,7 @@ ${renderProducts(model)}
 ${renderCustomers(model)}
 
 ${renderSales(model)}
+
+commit;
 `;
 }

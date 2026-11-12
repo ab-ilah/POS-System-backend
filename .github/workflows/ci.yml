@@ -129,6 +129,11 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y age
 
+      - name: Seed SQL integrity
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+        run: bash scripts/assert-seed-sql.sh
+
       - name: Reset database
         run: npx supabase db reset
 

@@ -6,6 +6,9 @@
 -- Historical sales are a snapshot. They do not post again into that balance.
 -- supabase db reset applies this file as postgres with no SET ROLE. That session
 -- may set credit balances. There is no seed flag a staff or service session can turn on.
+-- Wrapped in a single transaction so completion tokens share one xact_id with the status update.
+
+begin;
 
 insert into auth.users (
   instance_id,
@@ -405,3 +408,5 @@ from (values
 update public.sales
 set status = 'completed'
 where id in ('40000000-0000-4000-8000-000000000001'::uuid, '40000000-0000-4000-8000-000000000002'::uuid, '40000000-0000-4000-8000-000000000003'::uuid, '40000000-0000-4000-8000-000000000004'::uuid);
+
+commit;

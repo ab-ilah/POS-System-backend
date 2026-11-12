@@ -24,7 +24,14 @@ from fx;
 
 select set_config(
   'request.jwt.claims',
-  (select json_build_object('sub', cashier_id, 'role', 'authenticated')::text from fx),
+  (
+    select json_build_object(
+      'sub', cashier_id,
+      'role', 'authenticated',
+      'app_metadata', json_build_object('role', 'cashier')
+    )::text
+    from fx
+  ),
   true
 );
 select set_config(
@@ -32,17 +39,20 @@ select set_config(
   (select cashier_id::text from fx),
   true
 );
+set local role authenticated;
+
 select set_config('private.commit_sale_completing', '1', true);
 
-select throws_ok(
-  $$
-    update public.sales as s
-    set status = 'completed'
-    where s.id = 'a8a8a8a8-a8a8-48a8-88a8-a8a8a8a8a8a8'::uuid
-  $$,
-  '42501',
-  'sales can only be completed through commit_sale',
-  'cashier JWT session cannot complete without a completion token even with a forged GUC'
+update public.sales as s
+set status = 'completed'
+where s.id = 'a8a8a8a8-a8a8-48a8-88a8-a8a8a8a8a8a8'::uuid;
+
+reset role;
+
+select is(
+  (select s.status from public.sales as s where s.id = 'a8a8a8a8-a8a8-48a8-88a8-a8a8a8a8a8a8'::uuid),
+  'open',
+  'authenticated cashier cannot complete sale directly even with a forged GUC'
 );
 
 select * from finish();
