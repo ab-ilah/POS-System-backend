@@ -11,33 +11,7 @@ revoke insert, delete on table public.sales from authenticated;
 
 -- Column-level void/update grant for owner and manager (init_pos) must remain.
 
--- ---------- (d) case-insensitive unique email on auth.users ----------
-
-do $$
-declare
-  dupe text;
-begin
-  select lower(trim(u.email))
-  into dupe
-  from auth.users as u
-  where u.email is not null
-  group by lower(trim(u.email))
-  having count(*) > 1
-  limit 1;
-
-  if dupe is not null then
-    raise exception
-      'auth.users has emails that differ only by case (%); dedupe before applying lower(email) uniqueness',
-      dupe;
-  end if;
-end;
-$$;
-
-create unique index if not exists auth_users_email_lower_unique
-  on auth.users (lower(trim(email)))
-  where email is not null;
-
--- ---------- bootstrap + invite caller normalization ----------
+-- ---------- bootstrap email normalization (Auth enforces unique emails) ----------
 
 create or replace function private.bootstrap_first_owner(p_email text)
 returns uuid
