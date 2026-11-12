@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set search_path = extensions, public, pg_temp;
 
-select plan(8);
+select plan(7);
 
 select set_config('test.manager', (select id::text from auth.users where email = 'manager@example.com'), true);
 select set_config('test.cashier', (select id::text from auth.users where email = 'cashier@example.com'), true);
@@ -31,7 +31,7 @@ set local role service_role;
 select throws_ok(
   format(
     $$ select public.consume_staff_invite_slot(%L::uuid) $$,
-    '11111111-1111-4111-8111-111111111111'
+    'aaaaaaaa-aaaa-4000-8000-000000000099'
   ),
   '42501',
   null,

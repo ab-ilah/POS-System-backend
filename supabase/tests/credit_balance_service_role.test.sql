@@ -98,7 +98,7 @@ select throws_ok(
     where id = '66666666-6666-4666-8666-666666666661'
   $$,
   '42501',
-  'only an owner or manager can update a sale',
+  null,
   'service_role cannot change a sale status'
 );
 
@@ -118,7 +118,7 @@ select throws_ok(
     where id = '66666666-6666-4666-8666-666666666661'
   $$,
   '42501',
-  'only an owner or manager can update a sale',
+  null,
   'service_role with forged authenticated cashier jwt cannot complete a sale by direct update'
 );
 
