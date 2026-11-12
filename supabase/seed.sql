@@ -393,8 +393,8 @@ select set_config(
   true
 );
 
-insert into private.sale_completion_tokens (sale_id, txid)
-select v.id, pg_catalog.txid_current()
+insert into private.sale_completion_tokens (sale_id, xact_id)
+select v.id, pg_catalog.pg_current_xact_id()
 from (values
   ('40000000-0000-4000-8000-000000000001'::uuid),
   ('40000000-0000-4000-8000-000000000002'::uuid),

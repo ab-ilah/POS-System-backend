@@ -154,8 +154,8 @@ select set_config(
   true
 );
 
-insert into private.sale_completion_tokens (sale_id, txid)
-select v.id, pg_catalog.txid_current()
+insert into private.sale_completion_tokens (sale_id, xact_id)
+select v.id, pg_catalog.pg_current_xact_id()
 from (values
 ${model.sales.map((sale) => `  (${sqlUuid(sale.id)})`).join(",\n")}
 ) as v(id);

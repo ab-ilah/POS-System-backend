@@ -192,8 +192,6 @@ drop table if exists private.bootstrap_state;
 drop function if exists public.consume_staff_invite_slot(uuid);
 drop table if exists private.staff_invite_buckets;
 drop function if exists private.consume_staff_invite_slot(uuid);
-drop function if exists private.set_commit_sale_completing();
-drop function if exists private.clear_commit_sale_completing();
 drop table if exists private.sale_completion_tokens;
 drop function if exists private.sale_completion_token_pending(uuid);
 drop function if exists private.sale_completion_token_consume(uuid);
