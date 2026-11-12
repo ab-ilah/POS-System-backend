@@ -253,28 +253,30 @@ begin
     raise exception 'a voided sale is frozen'
       using errcode = '42501';
   end if;
-  if not (
-    private.session_is_trusted_db()
-    or (
-      coalesce(pg_catalog.current_setting('private.commit_sale_completing', true), '') = '1'
-      and (select auth.role()) = 'authenticated'
-      and coalesce((select auth.jwt() ->> 'role'), '') = 'authenticated'
-      and private.session_staff_app_role() in (
-        'owner'::public.app_role,
-        'manager'::public.app_role,
-        'cashier'::public.app_role
-      )
-      and old.status = 'open'
-      and new.status = 'completed'
-      and new.void_reason is null
-      and new.voided_at is null
+  if private.session_is_trusted_db() then
+    null;
+  elsif
+    coalesce(pg_catalog.current_setting('private.commit_sale_completing', true), '') = '1'
+    and (select auth.role()) = 'authenticated'
+    and coalesce((select auth.jwt() ->> 'role'), '') = 'authenticated'
+    and old.status = 'open'
+    and new.status = 'completed'
+    and new.void_reason is null
+    and new.voided_at is null
+    and private.session_staff_app_role() in (
+      'owner'::public.app_role,
+      'manager'::public.app_role,
+      'cashier'::public.app_role
     )
-    or (
-      current_user = 'authenticated'
-      and coalesce((select auth.jwt() ->> 'role'), '') = 'authenticated'
-      and private.current_app_role() in ('owner'::public.app_role, 'manager'::public.app_role)
-    )
-  ) then
+  then
+    null;
+  elsif
+    current_user = 'authenticated'
+    and coalesce((select auth.jwt() ->> 'role'), '') = 'authenticated'
+    and private.current_app_role() in ('owner'::public.app_role, 'manager'::public.app_role)
+  then
+    null;
+  else
     raise exception 'only an owner or manager can update a sale'
       using errcode = '42501';
   end if;
@@ -329,7 +331,6 @@ declare
   caller uuid;
   staff_role public.app_role;
   existing public.sales%rowtype;
-  other_cashier_sale boolean;
   line jsonb;
   line_id uuid;
   variant_id uuid;
@@ -479,26 +480,16 @@ begin
     end if;
   end loop;
 
-  select exists (
-    select 1
-    from public.sales as s
-    where s.id = p_idempotency_key
-      and s.cashier_id is distinct from caller
-  )
-  into other_cashier_sale;
-
-  if other_cashier_sale then
-    raise exception 'idempotency_key_conflict'
-      using errcode = 'P0004';
-  end if;
-
   select s.*
   into existing
   from public.sales as s
-  where s.id = p_idempotency_key
-    and s.cashier_id = caller;
+  where s.id = p_idempotency_key;
 
   if found then
+    if existing.cashier_id is distinct from caller then
+      raise exception 'idempotency_key_conflict'
+        using errcode = 'P0004';
+    end if;
     perform private.commit_sale_assert_lines_payload(p_lines);
     if not private.commit_sale_payload_matches(p_idempotency_key, p_store_id, p_lines) then
       raise exception 'idempotency_key_conflict'
@@ -611,23 +602,15 @@ begin
     );
   exception
     when unique_violation then
-      select exists (
-        select 1
-        from public.sales as s
-        where s.id = p_idempotency_key
-          and s.cashier_id is distinct from caller
-      )
-      into other_cashier_sale;
-      if other_cashier_sale then
-        raise exception 'idempotency_key_conflict'
-          using errcode = 'P0004';
-      end if;
       select s.*
       into existing
       from public.sales as s
-      where s.id = p_idempotency_key
-        and s.cashier_id = caller;
+      where s.id = p_idempotency_key;
       if found then
+        if existing.cashier_id is distinct from caller then
+          raise exception 'idempotency_key_conflict'
+            using errcode = 'P0004';
+        end if;
         perform private.commit_sale_assert_lines_payload(p_lines);
         if not private.commit_sale_payload_matches(p_idempotency_key, p_store_id, p_lines) then
           raise exception 'idempotency_key_conflict'

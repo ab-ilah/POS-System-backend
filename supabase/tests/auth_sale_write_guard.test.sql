@@ -94,8 +94,8 @@ select throws_ok(
     where id = 'b0b0b0b0-b0b0-40b0-80b0-b0b0b0b0b0b0'
   $$,
   '42501',
-  'sale amounts and identity columns are immutable',
-  'store_id is immutable on update'
+  NULL,
+  'store_id cannot be changed by a manager (privilege or trigger)'
 );
 
 select throws_ok(
