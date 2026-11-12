@@ -256,27 +256,31 @@ begin
   if private.session_is_trusted_db() then
     null;
   elsif
-    coalesce(pg_catalog.current_setting('private.commit_sale_completing', true), '') = '1'
-    and current_user = 'authenticated'
-    and (select auth.role()) = 'authenticated'
-    and coalesce((select auth.jwt() ->> 'role'), '') = 'authenticated'
-    and old.status = 'open'
-    and new.status = 'completed'
-    and new.void_reason is null
-    and new.voided_at is null
-    and private.session_staff_app_role() in (
-      'owner'::public.app_role,
-      'manager'::public.app_role,
-      'cashier'::public.app_role
-    )
-  then
-    null;
-  elsif
     current_user = 'authenticated'
     and coalesce((select auth.jwt() ->> 'role'), '') = 'authenticated'
     and private.current_app_role() in ('owner'::public.app_role, 'manager'::public.app_role)
   then
     null;
+  elsif coalesce(pg_catalog.current_setting('private.commit_sale_completing', true), '') = '1' then
+    if
+      current_user = 'authenticated'
+      and (select auth.role()) = 'authenticated'
+      and coalesce((select auth.jwt() ->> 'role'), '') = 'authenticated'
+      and private.session_staff_app_role() in (
+        'owner'::public.app_role,
+        'manager'::public.app_role,
+        'cashier'::public.app_role
+      )
+      and old.status = 'open'
+      and new.status = 'completed'
+      and new.void_reason is null
+      and new.voided_at is null
+    then
+      null;
+    else
+      raise exception 'only an owner or manager can update a sale'
+        using errcode = '42501';
+    end if;
   else
     raise exception 'only an owner or manager can update a sale'
       using errcode = '42501';
