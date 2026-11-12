@@ -43,6 +43,7 @@ describe("workflows", () => {
     expect(readFileSync("scripts/assert-postgres-major.sh", "utf8")).toContain("pg_dump");
     expect(ci).toContain("supabase db reset");
     expect(ci).toContain("npm run test:rls");
+    expect(ci).toContain("npm run test:commit-sale-api");
     expect(ci).toContain("scripts/check-credit-postgrest.ts");
     expect(ci).toContain("supabase test db");
     expect(ci).toContain("supabase db push --dry-run --yes --remote=");
