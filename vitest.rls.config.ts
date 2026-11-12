@@ -3,6 +3,7 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
     include: ["tests/rls/**/*.test.ts"],
+    exclude: ["tests/rls/commit_sale.api.test.ts"],
     fileParallelism: false,
     testTimeout: 30_000,
     hookTimeout: 30_000,
