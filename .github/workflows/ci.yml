@@ -71,6 +71,9 @@ jobs:
           deno check supabase/functions/health/index.ts
           deno check supabase/functions/invite-staff/index.ts
 
+      - name: invite-staff role validation
+        run: deno test supabase/functions/invite-staff/
+
       - name: Lint
         run: npm run lint
 

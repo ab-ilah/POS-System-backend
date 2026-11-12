@@ -30,7 +30,7 @@ The role must be `owner`. Ask the owner to sign in again so their token picks up
 
 ## Invite the rest of the staff
 
-1. Prefer the `invite-staff` Edge Function from a trusted server or automation (owner or manager JWT, plus Edge secrets). It creates the auth user, sets `full_name` in `user_metadata`, writes `role` to `app_metadata`, and rate-limits invites.
+1. Prefer the `invite-staff` Edge Function from a trusted server or automation (owner or manager JWT, plus Edge secrets). It creates the auth user, sets `full_name` in `user_metadata`, writes `role` to `app_metadata`, and rate-limits invites. It accepts only `manager` or `cashier`; `owner` is rejected with `invalid_role` (owners are bootstrap-only above).
 2. Alternatively, create the auth user in the dashboard and assign the role. From a session signed in as owner or manager:
 
 ```sql
