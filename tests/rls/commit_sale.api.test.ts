@@ -136,7 +136,11 @@ describe.skipIf(!runCommitSaleApi)("commit_sale via Supabase JS", () => {
       p_lines: lines,
     });
     expect(replay.error).toBeNull();
-    expect(replay.data).toEqual({ sale_id: saleId, replayed: true });
+    expect(replay.data).toEqual({
+      sale_id: saleId,
+      replayed: true,
+      status: "completed",
+    });
 
     const mismatch = await cashierClient.rpc("commit_sale", {
       p_idempotency_key: saleId,
