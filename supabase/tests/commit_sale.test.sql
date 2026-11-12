@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set search_path = extensions, public, pg_temp;
 
-select plan(30);
+select plan(31);
 
 create temporary table commit_fixture as
 select
@@ -345,9 +345,29 @@ select throws_ok(
           'variant_id', (select stocked_variant_id from commit_fixture),
           'quantity', 1,
           'unit_price_pesewas', (select shelf_price from commit_fixture)
-        ),
+        )
+      )
+    )
+  $$,
+  'P0004',
+  'idempotency_key_reuse',
+  'missing line on replay is rejected via multiset compare'
+);
+
+select throws_ok(
+  $$
+    select public.commit_sale(
+      '3d3d3d3d-3d3d-43d3-83d3-3d3d3d3d3d3d'::uuid,
+      (select store_id from commit_fixture),
+      jsonb_build_array(
         jsonb_build_object(
           'id', '40000000-0000-4000-8000-000000000001'::uuid,
+          'variant_id', (select stocked_variant_id from commit_fixture),
+          'quantity', 1,
+          'unit_price_pesewas', (select shelf_price from commit_fixture)
+        ),
+        jsonb_build_object(
+          'id', '40000000-0000-4000-8000-000000000002'::uuid,
           'variant_id', (select second_variant_id from commit_fixture),
           'quantity', 1,
           'unit_price_pesewas', (select second_shelf_price from commit_fixture)
@@ -357,7 +377,7 @@ select throws_ok(
   $$,
   'P0004',
   'idempotency_key_reuse',
-  'extra line on replay is rejected via multiset compare'
+  'replay with same tuples but different line ids is rejected'
 );
 
 select results_eq(
