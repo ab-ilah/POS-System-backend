@@ -143,6 +143,23 @@ insert into public.sale_items (
 ) values
 ${itemRows};
 
+select set_config(
+  'request.jwt.claims',
+  ${sqlString(JSON.stringify({ sub: model.users.find((user) => user.role === "manager")!.id, role: "authenticated" }))},
+  true
+);
+select set_config(
+  'request.jwt.claim.sub',
+  ${sqlString(model.users.find((user) => user.role === "manager")!.id)},
+  true
+);
+
+insert into private.sale_completion_tokens (sale_id, txid)
+select v.id, pg_catalog.txid_current()
+from (values
+${model.sales.map((sale) => `  (${sqlUuid(sale.id)})`).join(",\n")}
+) as v(id);
+
 update public.sales
 set status = 'completed'
 where id in (${model.sales.map((sale) => sqlUuid(sale.id)).join(", ")});`;

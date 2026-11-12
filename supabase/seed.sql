@@ -382,6 +382,26 @@ insert into public.sale_items (
   ('50000000-0000-4000-8000-000000000005'::uuid, '40000000-0000-4000-8000-000000000003'::uuid, '20000000-0000-4000-8000-00000000003c'::uuid, 'Kejetia Leather Loafer', '41', 'Polished Brown', 1, 55000, 55000),
   ('50000000-0000-4000-8000-000000000006'::uuid, '40000000-0000-4000-8000-000000000004'::uuid, '20000000-0000-4000-8000-000000000027'::uuid, 'Friday Kaftan Agbada Cut', 'L', 'Cream and Gold', 1, 120000, 120000);
 
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"22222222-2222-4222-8222-222222222222","role":"authenticated"}',
+  true
+);
+select set_config(
+  'request.jwt.claim.sub',
+  '22222222-2222-4222-8222-222222222222',
+  true
+);
+
+insert into private.sale_completion_tokens (sale_id, txid)
+select v.id, pg_catalog.txid_current()
+from (values
+  ('40000000-0000-4000-8000-000000000001'::uuid),
+  ('40000000-0000-4000-8000-000000000002'::uuid),
+  ('40000000-0000-4000-8000-000000000003'::uuid),
+  ('40000000-0000-4000-8000-000000000004'::uuid)
+) as v(id);
+
 update public.sales
 set status = 'completed'
 where id in ('40000000-0000-4000-8000-000000000001'::uuid, '40000000-0000-4000-8000-000000000002'::uuid, '40000000-0000-4000-8000-000000000003'::uuid, '40000000-0000-4000-8000-000000000004'::uuid);

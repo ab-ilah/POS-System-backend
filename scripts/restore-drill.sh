@@ -194,6 +194,9 @@ drop table if exists private.staff_invite_buckets;
 drop function if exists private.consume_staff_invite_slot(uuid);
 drop function if exists private.set_commit_sale_completing();
 drop function if exists private.clear_commit_sale_completing();
+drop table if exists private.sale_completion_tokens;
+drop function if exists private.sale_completion_token_pending(uuid);
+drop function if exists private.sale_completion_token_consume(uuid);
 drop type if exists public.app_role cascade;
 SQL
 docker exec "$container" pg_restore -l /tmp/pos-restore.dump > "$workdir/toc.list"
