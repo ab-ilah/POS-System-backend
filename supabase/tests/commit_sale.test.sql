@@ -538,16 +538,22 @@ select set_config(
 );
 set local role authenticated;
 
+create or replace function pg_temp.cashier_try_complete_open_sale() returns integer
+language plpgsql
+as $$
+declare
+  rows_updated integer;
+begin
+  update public.sales
+  set status = 'completed'
+  where id = 'c1c1c1c1-c1c1-41c1-81c1-c1c1c1c1c1c1'::uuid;
+  get diagnostics rows_updated = row_count;
+  return rows_updated;
+end;
+$$;
+
 select is(
-  (
-    with updated as (
-      update public.sales
-      set status = 'completed'
-      where id = 'c1c1c1c1-c1c1-41c1-81c1-c1c1c1c1c1c1'::uuid
-      returning id
-    )
-    select count(*)::int from updated
-  ),
+  pg_temp.cashier_try_complete_open_sale(),
   0,
   'cashier cannot complete a sale with a direct update'
 );
