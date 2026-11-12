@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set search_path = extensions, public, pg_temp;
 
-select plan(33);
+select plan(34);
 
 create or replace function pg_temp.commit_sale_pstck_detail(
   p_idempotency_key uuid,
@@ -538,15 +538,24 @@ select set_config(
 );
 set local role authenticated;
 
-select throws_ok(
-  $$
-    update public.sales
-    set status = 'completed'
-    where id = 'c1c1c1c1-c1c1-41c1-81c1-c1c1c1c1c1c1'::uuid
-  $$,
-  '42501',
-  'only an owner or manager can update a sale',
+select is(
+  (
+    with updated as (
+      update public.sales
+      set status = 'completed'
+      where id = 'c1c1c1c1-c1c1-41c1-81c1-c1c1c1c1c1c1'::uuid
+      returning id
+    )
+    select count(*)::int from updated
+  ),
+  0,
   'cashier cannot complete a sale with a direct update'
+);
+
+select is(
+  (select status from public.sales where id = 'c1c1c1c1-c1c1-41c1-81c1-c1c1c1c1c1c1'::uuid),
+  'open',
+  'direct update attempt left the sale open'
 );
 
 select throws_ok(
