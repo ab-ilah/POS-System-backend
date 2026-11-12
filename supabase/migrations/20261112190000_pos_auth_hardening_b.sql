@@ -7,6 +7,38 @@ create table private.sale_completion_tokens (
 
 revoke all on table private.sale_completion_tokens from public, anon, authenticated, service_role;
 
+create or replace function private.sale_completion_token_pending(p_sale_id uuid)
+returns boolean
+language sql
+volatile
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1
+    from private.sale_completion_tokens as t
+    where t.sale_id = p_sale_id
+      and t.txid = pg_catalog.txid_current()
+  );
+$$;
+
+create or replace function private.sale_completion_token_consume(p_sale_id uuid)
+returns void
+language sql
+volatile
+security definer
+set search_path = ''
+as $$
+  delete from private.sale_completion_tokens as t
+  where t.sale_id = p_sale_id
+    and t.txid = pg_catalog.txid_current();
+$$;
+
+revoke all on function private.sale_completion_token_pending(uuid) from public, anon, authenticated, service_role;
+revoke all on function private.sale_completion_token_consume(uuid) from public, anon, authenticated, service_role;
+grant execute on function private.sale_completion_token_pending(uuid) to postgres;
+grant execute on function private.sale_completion_token_consume(uuid) to postgres;
+
 create or replace function private.set_commit_sale_completing()
 returns void
 language plpgsql
@@ -55,15 +87,11 @@ begin
     and private.current_app_role() in ('owner'::public.app_role, 'manager'::public.app_role)
   then
     null;
-  elsif
-    current_user in ('postgres', 'supabase_admin')
-    and exists (
-      select 1
-      from private.sale_completion_tokens as t
-      where t.sale_id = new.id
-        and t.txid = pg_catalog.txid_current()
-    )
-  then
+  elsif current_user in ('postgres', 'supabase_admin') then
+    if not private.sale_completion_token_pending(new.id) then
+      raise exception 'only an owner or manager can update a sale'
+        using errcode = '42501';
+    end if;
   -- commit_sale issues a per-transaction token; the GUC is not trusted.
     if coalesce((select auth.jwt() ->> 'role'), '') is distinct from 'authenticated' then
       raise exception 'only an owner or manager can update a sale'
@@ -79,9 +107,7 @@ begin
       and new.void_reason is null
       and new.voided_at is null
     then
-      delete from private.sale_completion_tokens as t
-      where t.sale_id = new.id
-        and t.txid = pg_catalog.txid_current();
+      perform private.sale_completion_token_consume(new.id);
     else
       raise exception 'only an owner or manager can update a sale'
         using errcode = '42501';

@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set search_path = extensions, public, pg_temp;
 
-select plan(5);
+select plan(6);
 
 create temporary table fx as
 select
@@ -84,15 +84,21 @@ set local role authenticated;
 
 select set_config('private.commit_sale_completing', '1', true);
 
-select throws_ok(
-  $$
+select is(
+  (
     update public.sales as s
     set status = 'completed'
     where s.id = 'c1c1c1c1-c1c1-41c1-81c1-c1c1c1c1c1c1'::uuid
-  $$,
-  '42501',
+    returning 1
+  ),
   null,
-  'cashier forged GUC cannot complete sale directly'
+  'cashier forged GUC cannot complete sale directly (RLS blocks update)'
+);
+
+select is(
+  (select s.status from public.sales as s where s.id = 'c1c1c1c1-c1c1-41c1-81c1-c1c1c1c1c1c1'::uuid),
+  'open',
+  'forged GUC probe sale stays open'
 );
 
 reset role;
@@ -127,12 +133,12 @@ select lives_ok(
   'commit_sale completes over authenticated'
 );
 
+reset role;
+
 select is_empty(
   $$ select 1 from private.sale_completion_tokens where sale_id = 'c2c2c2c2-c2c2-42c2-82c2-c2c2c2c2c2c2'::uuid $$,
   'completion token row is consumed'
 );
-
-reset role;
 
 insert into public.sales (
   id, receipt_no, store_id, cashier_id, status,

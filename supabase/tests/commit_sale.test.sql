@@ -27,6 +27,8 @@ exception
 end;
 $$;
 
+grant execute on function pg_temp.commit_sale_pstck_detail(uuid, uuid, jsonb) to authenticated;
+
 create temporary table commit_fixture as
 select
   'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'::uuid as store_id,
