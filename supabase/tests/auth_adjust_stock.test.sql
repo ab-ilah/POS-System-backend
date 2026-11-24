@@ -345,9 +345,26 @@ select lives_ok(
   'manager can update price_pesewas'
 );
 
+reset role;
+
 update public.product_variants
-set stock_qty = (select starting_qty + 1 from fx)
-where id = (select variant_id from fx);
+set stock_qty = current_setting('test.starting_qty')::integer + 1
+where id = current_setting('test.variant_id')::uuid;
+
+select set_config(
+  'request.jwt.claims',
+  json_build_object(
+    'sub', current_setting('test.manager_id'),
+    'role', 'authenticated'
+  )::text,
+  true
+);
+select set_config(
+  'request.jwt.claim.sub',
+  current_setting('test.manager_id'),
+  true
+);
+set local role authenticated;
 
 select is(
   public.adjust_stock((select variant_id from fx), 1, 'still via rpc'),
