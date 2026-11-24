@@ -189,6 +189,7 @@ drop function if exists public.my_role();
 drop function if exists private.target_is_owner(uuid);
 drop function if exists private.bootstrap_first_owner(text);
 drop table if exists private.bootstrap_state;
+drop function if exists public.adjust_stock(uuid, integer, text);
 drop function if exists public.consume_staff_invite_slot();
 drop function if exists public.consume_staff_invite_slot(uuid);
 drop table if exists private.staff_invite_buckets;
