@@ -169,10 +169,12 @@ jobs:
           source <(npx supabase status -o env)
           set +a
           export RUN_COMMIT_SALE_API=1
+          export RUN_PRODUCT_IMAGES_API=1
           export RUN_AUTH_SIGNUP_CHECK=1
           export SUPABASE_URL="${API_URL}"
           export SUPABASE_ANON_KEY="${ANON_KEY}"
           npm run test:commit-sale-api
+          npx vitest run --config vitest.rls.config.ts tests/rls/product_images.api.test.ts
           npx vitest run --config vitest.rls.config.ts tests/rls/auth_email_case_insensitive.api.test.ts
           npx vitest run tests/auth-signup-disabled.test.ts
 

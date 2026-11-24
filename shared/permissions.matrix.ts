@@ -80,7 +80,8 @@ const ACCESS: {
 export const PERMISSION_SCOPE_NOTES: Readonly<Record<TableName, string>> = {
   profiles:
     "A new auth user has a profile and no role, so RLS allows nothing until an owner or manager assigns one. Cashier select and update apply only to that cashier's own row. A manager cannot edit an owner. Nobody inserts profiles through the API.",
-  products: "Owner and manager maintain the catalogue. Cashiers can read it at the till.",
+  products:
+    "Owner and manager maintain the catalogue. Cashiers can read it at the till. image_path points at product-images storage (products/<id>/<file>); only owner and manager upload or change objects.",
   product_variants:
     "Same catalogue rules as products. Shelf prices are integers in pesewas and already include tax.",
   customers:
