@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set search_path = extensions, public, pg_temp;
 
-select plan(11);
+select plan(12);
 
 select set_config('test.owner', (select id::text from auth.users where email = 'owner@example.com'), true);
 select set_config('test.manager', (select id::text from auth.users where email = 'manager@example.com'), true);
@@ -41,17 +41,6 @@ select throws_ok(
 
 select set_config(
   'request.jwt.claims',
-  json_build_object('sub', current_setting('test.owner'), 'role', 'authenticated')::text,
-  true
-);
-
-select lives_ok(
-  $$ select public.consume_staff_invite_slot() $$,
-  'owner consumes one slot from own bucket'
-);
-
-select set_config(
-  'request.jwt.claims',
   json_build_object('sub', current_setting('test.manager'), 'role', 'authenticated')::text,
   true
 );
@@ -83,8 +72,33 @@ select is(
     where caller_id = current_setting('test.owner')::uuid
       and bucket_start = date_trunc('hour', now())
   ),
-  3,
-  'owner bucket count decrements without touching manager bucket'
+  4,
+  'owner bucket count unchanged while manager invites'
+);
+
+select set_config(
+  'request.jwt.claims',
+  json_build_object('sub', current_setting('test.owner'), 'role', 'authenticated')::text,
+  true
+);
+set local role authenticated;
+
+select lives_ok(
+  $$ select public.consume_staff_invite_slot() $$,
+  'owner consumes one slot from own bucket'
+);
+
+reset role;
+
+select is(
+  (
+    select invite_count
+    from private.staff_invite_buckets
+    where caller_id = current_setting('test.owner')::uuid
+      and bucket_start = date_trunc('hour', now())
+  ),
+  5,
+  'owner bucket increments when owner consumes'
 );
 
 select set_config(

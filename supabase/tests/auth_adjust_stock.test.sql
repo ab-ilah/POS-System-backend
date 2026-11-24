@@ -26,14 +26,23 @@ set starting_qty = (
 
 grant select on fx to authenticated;
 
+select set_config('test.variant_id', (select variant_id::text from fx), true);
+select set_config('test.owner_id', (select owner_id::text from fx), true);
+select set_config('test.manager_id', (select manager_id::text from fx), true);
+select set_config('test.cashier_id', (select cashier_id::text from fx), true);
+select set_config('test.starting_qty', (select starting_qty::text from fx), true);
+
 select set_config(
   'request.jwt.claims',
-  (select json_build_object('sub', owner_id, 'role', 'authenticated')::text from fx),
+  json_build_object(
+    'sub', current_setting('test.owner_id'),
+    'role', 'authenticated'
+  )::text,
   true
 );
 select set_config(
   'request.jwt.claim.sub',
-  (select owner_id::text from fx),
+  current_setting('test.owner_id'),
   true
 );
 set local role authenticated;
@@ -129,26 +138,28 @@ select ok(
 );
 
 select throws_ok(
-  $$
-    select public.adjust_stock(
-      (select variant_id from fx),
-      1,
-      'anon attempt'
-    )
-  $$,
+  format(
+    $$ select public.adjust_stock(%L::uuid, 1, 'anon attempt') $$,
+    current_setting('test.variant_id')
+  ),
   '42501',
   null,
   'anon cannot adjust stock'
 );
 
+reset role;
+
 select set_config(
   'request.jwt.claims',
-  (select json_build_object('sub', owner_id, 'role', 'authenticated')::text from fx),
+  json_build_object(
+    'sub', current_setting('test.owner_id'),
+    'role', 'authenticated'
+  )::text,
   true
 );
 select set_config(
   'request.jwt.claim.sub',
-  (select owner_id::text from fx),
+  current_setting('test.owner_id'),
   true
 );
 set local role authenticated;
