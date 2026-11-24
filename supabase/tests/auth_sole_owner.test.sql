@@ -101,6 +101,13 @@ select throws_ok(
   'manager cannot demote the owner'
 );
 
+select set_config(
+  'request.jwt.claims',
+  json_build_object('sub', current_setting('test.owner'), 'role', 'authenticated')::text,
+  true
+);
+set local role authenticated;
+
 select lives_ok(
   format(
     $$ select public.assign_staff_role(%L::uuid, 'manager'::public.app_role) $$,

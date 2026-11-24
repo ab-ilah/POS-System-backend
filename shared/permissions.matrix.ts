@@ -82,7 +82,7 @@ export const PERMISSION_SCOPE_NOTES: Readonly<Record<TableName, string>> = {
     "A new auth user has a profile and no role, so RLS allows nothing until an owner or manager assigns one. Cashier select and update apply only to that cashier's own row. A manager cannot edit an owner. Nobody inserts profiles through the API.",
   products: "Owner and manager maintain the catalogue. Cashiers can read it at the till.",
   product_variants:
-    "Same catalogue rules as products. Shelf prices are integers in pesewas and already include tax. stock_qty changes only through adjust_stock or commit_sale; INSERT may set initial stock on a new variant.",
+    "Same catalogue rules as products. Shelf prices are integers in pesewas and already include tax. stock_qty changes only through adjust_stock or commit_sale; INSERT may set initial stock on a new variant. Neither staff JWTs nor service_role may UPDATE stock_qty directly.",
   customers:
     "Cashiers can register a customer at a zero credit balance and update name and phone. Only an authenticated owner can set or change credit_balance_pesewas. A service-role JWT is denied even when its subject is the owner. Cashiers cannot delete a customer.",
   sales:
@@ -91,7 +91,7 @@ export const PERMISSION_SCOPE_NOTES: Readonly<Record<TableName, string>> = {
   sale_items:
     "Staff cannot insert sale lines directly. commit_sale inserts lines during its own transaction. Completed and voided sales reject line edits, line deletes, and moving a line to another sale. Corrections are a void plus a new sale.",
   stock_movements:
-    "Append-only ledger: sale rows from commit_sale and adjustment rows from adjust_stock (reason + actor). Staff cannot insert rows directly.",
+    "Append-only ledger: sale rows from commit_sale and adjustment rows from adjust_stock (reason + actor). Staff cannot insert rows directly; UPDATE and DELETE are blocked by a trigger for all roles.",
 };
 
 function flatten(): readonly PermissionRow[] {
