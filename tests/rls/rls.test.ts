@@ -272,7 +272,7 @@ async function updateProbe(tx: Tx, role: Role, table: TableName): Promise<number
   if (table === "product_variants") {
     const result = await tx`
       update public.product_variants
-      set stock_qty = stock_qty
+      set price_pesewas = price_pesewas
       where id = ${model.targets.updateVariantId}::uuid
     `;
     return Number(result.count);
