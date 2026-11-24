@@ -5,6 +5,12 @@ set search_path = extensions, public, pg_temp;
 
 select plan(5);
 
+select set_config(
+  'test.manager',
+  (select id::text from auth.users where email = 'manager@example.com'),
+  true
+);
+
 insert into public.sales (
   store_id,
   id,
@@ -34,6 +40,13 @@ select
   0
 from auth.users
 where email = 'cashier@example.com';
+
+select set_config(
+  'request.jwt.claims',
+  json_build_object('sub', current_setting('test.manager'), 'role', 'authenticated')::text,
+  true
+);
+set local role authenticated;
 
 select throws_ok(
   $$

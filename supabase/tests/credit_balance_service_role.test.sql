@@ -288,7 +288,7 @@ select throws_ok(
     where id = '66666666-6666-4666-8666-666666666661'
   $$,
   '42501',
-  null,
+  'sales can only be completed through commit_sale',
   'an authenticated manager cannot complete an open sale by direct update'
 );
 

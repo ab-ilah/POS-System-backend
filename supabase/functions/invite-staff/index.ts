@@ -3,7 +3,7 @@
  * Does not send email; the operator shares credentials or reset flows out of band.
  */
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { isInvitableStaffRole } from "./roles.ts";
+import { inviteRoleHttpError } from "./invite_role_http.ts";
 
 const corsHeaders: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
@@ -58,11 +58,12 @@ Deno.serve(async (request: Request): Promise<Response> => {
   const email = payload.email?.trim().toLowerCase() ?? "";
   const fullName = payload.full_name?.trim() ?? "";
   const role = payload.role?.trim() ?? "";
-  if (!email || !fullName) {
+  if (!email || !fullName || !role.trim()) {
     return jsonResponse(400, { error: "invalid_invite" });
   }
-  if (!isInvitableStaffRole(role)) {
-    return jsonResponse(400, { error: "invalid_role" });
+  const invalidRole = inviteRoleHttpError(role);
+  if (invalidRole) {
+    return jsonResponse(invalidRole.status, { error: invalidRole.error });
   }
 
   const callerClient = createClient(supabaseUrl, anonKey, {
@@ -89,12 +90,12 @@ Deno.serve(async (request: Request): Promise<Response> => {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 
-  const { error: rateError } = await adminClient.rpc("consume_staff_invite_slot", {
-    p_caller: caller.id,
-  });
+  const { error: rateError } = await callerClient.rpc("consume_staff_invite_slot");
   if (rateError) {
-    const code = rateError.code === "P0004" ? 429 : 403;
-    return jsonResponse(code, { error: "rate_limited" });
+    if (rateError.code === "P0004") {
+      return jsonResponse(429, { error: "rate_limited" });
+    }
+    return jsonResponse(500, { error: "internal_error" });
   }
 
   const { data: created, error: createError } = await adminClient.auth.admin.createUser({

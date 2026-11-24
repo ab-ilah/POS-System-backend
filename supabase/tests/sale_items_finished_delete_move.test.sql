@@ -5,6 +5,12 @@ set search_path = extensions, public, pg_temp;
 
 select plan(8);
 
+select set_config(
+  'test.cashier',
+  (select id::text from auth.users where email = 'cashier@example.com'),
+  true
+);
+
 insert into public.sales (
   store_id,
   id, receipt_no, cashier_id, status,
@@ -42,14 +48,21 @@ update public.sales
 set status = 'voided', void_reason = 'pgTAP void', voided_at = now()
 where id = '77777777-7777-4777-8777-777777777772';
 
+select set_config(
+  'request.jwt.claims',
+  json_build_object('sub', current_setting('test.cashier'), 'role', 'authenticated')::text,
+  true
+);
+set local role authenticated;
+
 select throws_ok(
   $$
     delete from public.sale_items
     where sale_id in (select id from public.sales where status = 'completed')
   $$,
   '42501',
-  'cannot change lines on a finished sale',
-  'a completed sale rejects a line delete'
+  null,
+  'authenticated cannot delete sale_items (completed sale)'
 );
 
 select throws_ok(
@@ -58,8 +71,8 @@ select throws_ok(
     where id = '77777777-7777-4777-8777-777777777782'
   $$,
   '42501',
-  'cannot change lines on a finished sale',
-  'a voided sale rejects a line delete'
+  null,
+  'authenticated cannot delete sale_items (voided sale)'
 );
 
 select throws_ok(
@@ -69,8 +82,8 @@ select throws_ok(
     where sale_id in (select id from public.sales where status = 'completed')
   $$,
   '42501',
-  'cannot change lines on a finished sale',
-  'a line cannot move off a completed sale onto an open sale'
+  null,
+  'authenticated cannot update sale_items (move off completed sale)'
 );
 
 select throws_ok(
@@ -80,8 +93,8 @@ select throws_ok(
     where id = '77777777-7777-4777-8777-777777777781'
   $$,
   '42501',
-  'cannot change lines on a finished sale',
-  'a line cannot move from an open sale onto a completed sale'
+  null,
+  'authenticated cannot update sale_items (move onto completed sale)'
 );
 
 set local role service_role;

@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set search_path = extensions, public, pg_temp;
 
-select plan(11);
+select plan(12);
 
 -- Allowlist reasons: migration 20261112200000_pos_auth_hardening_e.sql (re-grant block).
 
@@ -90,9 +90,15 @@ select is(
 );
 
 select is(
-  has_function_privilege('service_role', 'public.consume_staff_invite_slot(uuid)', 'execute'),
+  has_function_privilege('authenticated', 'public.consume_staff_invite_slot()', 'execute'),
   true,
-  'consume_staff_invite_slot granted to service_role'
+  'consume_staff_invite_slot granted to authenticated'
+);
+
+select is(
+  has_function_privilege('service_role', 'public.consume_staff_invite_slot()', 'execute'),
+  false,
+  'consume_staff_invite_slot is not granted to service_role'
 );
 
 select is(
