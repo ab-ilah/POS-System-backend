@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set search_path = extensions, public, pg_temp;
 
-select plan(12);
+select plan(14);
 
 -- Allowlist reasons: migration 20261112200000_pos_auth_hardening_e.sql (re-grant block).
 
@@ -105,6 +105,18 @@ select is(
   has_function_privilege('service_role', 'public.assign_staff_role(uuid,public.app_role)', 'execute'),
   false,
   'assign_staff_role is not granted to service_role'
+);
+
+select is(
+  has_function_privilege('authenticated', 'public.adjust_stock(uuid,integer,text)', 'execute'),
+  true,
+  'adjust_stock granted to authenticated'
+);
+
+select is(
+  has_function_privilege('service_role', 'public.adjust_stock(uuid,integer,text)', 'execute'),
+  false,
+  'adjust_stock is not granted to service_role'
 );
 
 select * from finish();
