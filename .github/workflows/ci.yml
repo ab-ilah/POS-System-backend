@@ -69,10 +69,10 @@ jobs:
       - name: Typecheck edge functions
         run: |
           deno check supabase/functions/health/index.ts
-          deno check supabase/functions/invite-staff/index.ts
+          cd supabase/functions/invite-staff && deno check index.ts
 
       - name: invite-staff role validation
-        run: deno test supabase/functions/invite-staff/
+        run: cd supabase/functions/invite-staff && deno test
 
       - name: Lint
         run: npm run lint

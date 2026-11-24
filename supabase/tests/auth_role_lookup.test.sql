@@ -62,7 +62,7 @@ set local role authenticated;
 select throws_ok(
   $$ select public.assign_staff_role((select owner_id from fx), 'cashier') $$,
   '42501',
-  null,
+  'the owner cannot be reassigned',
   'manager still cannot demote owner'
 );
 
