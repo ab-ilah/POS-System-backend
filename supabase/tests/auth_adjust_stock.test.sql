@@ -402,6 +402,16 @@ select throws_ok(
 
 reset role;
 
+insert into public.stock_movements (sale_id, sale_item_id, variant_id, qty_delta)
+select si.sale_id, si.id, si.variant_id, -1
+from public.sale_items as si
+where not exists (
+  select 1
+  from public.stock_movements as m
+  where m.sale_item_id = si.id
+)
+limit 1;
+
 select throws_ok(
   format(
     $$ insert into public.stock_movements (
@@ -411,7 +421,7 @@ select throws_ok(
        from public.stock_movements
        where sale_id is not null
        limit 1 $$,
-    (select owner_id from fx)
+    current_setting('test.owner_id')
   ),
   '23514',
   null,
