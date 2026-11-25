@@ -65,7 +65,8 @@ select bag_eq(
       ('private.session_is_authenticated_staff()'::text),
       ('private.session_is_trusted_db()'::text),
       ('private.target_is_owner(uuid)'::text),
-      ('private.write_staff_role(uuid,app_role)'::text)
+      ('private.write_staff_role(uuid,app_role)'::text),
+      ('private.product_images_path_ok(text)'::text)
     order by 1
   $$,
   'authenticated private EXECUTE matches the allowlist'
