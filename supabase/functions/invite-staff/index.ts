@@ -4,17 +4,12 @@
  */
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { inviteRoleHttpError } from "./invite_role_http.ts";
+import { parseInviteJsonBody, type InviteBody } from "./invite_json_body.ts";
 
 const corsHeaders: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
-
-type InviteBody = {
-  email?: string;
-  full_name?: string;
-  role?: string;
 };
 
 function jsonResponse(status: number, body: Record<string, unknown>): Response {
@@ -48,10 +43,14 @@ Deno.serve(async (request: Request): Promise<Response> => {
     return jsonResponse(401, { error: "unauthorized" });
   }
 
-  let payload: InviteBody;
+  let raw: unknown;
   try {
-    payload = (await request.json()) as InviteBody;
+    raw = await request.json();
   } catch {
+    return jsonResponse(400, { error: "invalid_json" });
+  }
+  const payload = parseInviteJsonBody(raw);
+  if (payload === null) {
     return jsonResponse(400, { error: "invalid_json" });
   }
 
